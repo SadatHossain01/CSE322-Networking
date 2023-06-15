@@ -8,24 +8,23 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import util.FileRequest;
-import util.Message;
-import util.NetworkUtil;
-import util.FileInfo;
+import util.*;
 
 public class Server {
     private ServerSocket serverSocket;
     private HashMap<String, NetworkUtil> clientMap;
     private List<String> userList;
     private HashMap<String, List<FileInfo>> fileMap;
-    private HashMap<String, List<Message>> messageMap;
+    private HashMap<String, List<UserMessage>> messageMap;
     private List<FileRequest> fileRequestList;
-    private int MAX_BUFFER_SIZE, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE; // kB
+    private int FILE_COUNT;
+    public long CUR_BUFFER_SIZE, MAX_BUFFER_SIZE, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE; // in bytes
 
-    public Server(int MAX_BUFFER_SIZE, int MIN_CHUNK_SIZE, int MAX_CHUNK_SIZE) {
+    public Server(long MAX_BUFFER_SIZE, long MIN_CHUNK_SIZE, long MAX_CHUNK_SIZE) {
         this.MAX_BUFFER_SIZE = MAX_BUFFER_SIZE;
         this.MIN_CHUNK_SIZE = MIN_CHUNK_SIZE;
         this.MAX_CHUNK_SIZE = MAX_CHUNK_SIZE;
+        this.CUR_BUFFER_SIZE = 0;
         clientMap = new HashMap<>();
         userList = new ArrayList<>();
         fileMap = new HashMap<>();
@@ -33,7 +32,7 @@ public class Server {
         messageMap = new HashMap<>();
 
         try {
-            System.out.println("Server starts...\n");
+            System.out.println("Server started...");
             serverSocket = new ServerSocket(33333);
             File file = new File("src/storage");
             file.mkdir();
@@ -41,7 +40,7 @@ public class Server {
                 serve(serverSocket.accept());
             }
         } catch (Exception e) {
-            System.out.println("Server failed to start: " + e + "\n");
+            System.out.println("Server failed to start: " + e);
         }
     }
 
@@ -79,7 +78,7 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        Server server = new Server(20000, 100, 1000);
+        Server server = new Server(1000000000, 1000, 1000);
     }
 
     public List<String> getUserList(String type) {
@@ -99,8 +98,8 @@ public class Server {
     public List<String> getMyFiles(String username) {
         List<String> myFiles = new ArrayList<>();
         for (FileInfo file : fileMap.get(username)) {
-            String s = file.getName();
-            if (file.isPrivate()) s += "X";
+            String s = file.fileName;
+            if (file.isPrivate) s += "X";
             else s += "O";
             myFiles.add(s);
         }
@@ -111,9 +110,9 @@ public class Server {
         List<String> sharedFiles = new ArrayList<>();
         for (String username : fileMap.keySet()) {
             for (FileInfo file : fileMap.get(username)) {
-                if (!file.isPrivate()) {
-                    String s = file.getName();
-                    s += " (File ID: " + file.getID() + ")O"; // O for public
+                if (!file.isPrivate) {
+                    String s = file.fileName;
+                    s += " (File ID: " + file.fileID + ")O"; // O for public
                     sharedFiles.add(s);
                 }
             }
@@ -128,7 +127,7 @@ public class Server {
     public void broadcastRequest(FileRequest fileRequest) {
         String description = fileRequest.requester + " has requested for a file of following description: (Request ID: " + fileRequest.requestID + ")\n";
         description += fileRequest.description;
-        Message m = new Message(fileRequest.requester, "all", true, description);
+        UserMessage m = new UserMessage(fileRequest.requester, "all", true, description);
         for (String username : clientMap.keySet()) { // broadcast to all the connected clients
             messageMap.get(username).add(m);
         }
@@ -136,7 +135,7 @@ public class Server {
 
     public List<String> getMessages(String username) {
         List<String> messages = new ArrayList<>();
-        for (Message m : messageMap.get(username)) {
+        for (UserMessage m : messageMap.get(username)) {
             messages.add(m.msg);
             m.seen = true;
         }
@@ -152,5 +151,36 @@ public class Server {
             fileRequests.add(s);
         }
         return fileRequests;
+    }
+
+    public boolean checkRequestID(String requestID) {
+        for (FileRequest fileRequest : fileRequestList) {
+            if (fileRequest.requestID.equals(requestID)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void addFile(FileUploadInitiationRequest req, String fileID) {
+        req.fileInfo.fileID = fileID;
+        fileMap.get(req.fileInfo.ownerName).add(req.fileInfo);
+        FILE_COUNT++;
+        if (req.requested) {
+            // send message to the person that requested the file
+            String req_id = req.requestID;
+
+            for (FileRequest fileRequest : fileRequestList) {
+                if (fileRequest.requestID.equals(req_id)) {
+                    UserMessage m = new UserMessage(req.fileInfo.ownerName, fileRequest.requester, false, "File " + req.fileInfo.fileName + " has been uploaded by " + req.fileInfo.ownerName + " (File ID: " + fileID + ")");
+                    messageMap.get(fileRequest.requester).add(m);
+                    break;
+                }
+            }
+        }
+    }
+
+    public String generateFileID() {
+        return FILE_COUNT + 1 + "";
     }
 }

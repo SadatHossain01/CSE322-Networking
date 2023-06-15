@@ -28,11 +28,29 @@ public class NetworkUtil {
 
     public void write(Object o) throws IOException {
         oos.writeUnshared(o);
+        flush();
     }
 
     public void closeConnection() throws IOException {
         ois.close();
         oos.close();
+    }
+
+    public int read(byte[] buf, int off, int len) throws IOException {
+//        buf - the buffer into which the data is read
+//        off - the start offset in the destination array buf
+//        len - the maximum number of bytes read
+//        https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/io/ObjectInputStream.html#read(byte%5B%5D,int,int)
+        return ois.read(buf, off, len);
+    }
+
+    public void write(byte[] buffer, int off, int len) throws IOException {
+        oos.write(buffer, off, len);
+        flush();
+    }
+
+    public void flush() throws IOException {
+        oos.flush();
     }
 }
 

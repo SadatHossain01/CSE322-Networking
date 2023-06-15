@@ -1,13 +1,13 @@
 package util;
 
-public class Message {
+public class UserMessage {
     public boolean seen = false;
     public String sender;
     public String receiver;
     public String msg;
     public boolean isRequest;
 
-    public Message(String sender, String receiver, boolean isRequest, String msg) {
+    public UserMessage(String sender, String receiver, boolean isRequest, String msg) {
         this.sender = sender;
         this.receiver = receiver;
         this.msg = msg;

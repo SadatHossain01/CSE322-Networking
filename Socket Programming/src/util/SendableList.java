@@ -32,31 +32,32 @@ public class SendableList implements Serializable {
 
         int i = 1;
         if (publicCount > 0) {
-            System.out.println("Public Files:");
+            if (type.equals("Your")) System.out.println("Public Files:");
             for (String file : list) {
                 int len = file.length();
                 if (file.charAt(len - 1) == 'X') continue;
-                System.out.println(i + ". " + file.substring(0, len - 2));
+                System.out.println(i + ". " + file.substring(0, len - 1));
                 i++;
             }
         } else {
             if (type.equals("Your")) System.out.println("No public files to show.");
             else System.out.println("No shared files to show.");
         }
-        if (!type.equals("Your")) return; // because shared files are not private
 
-        if (list.size() - publicCount > 0) {
-            System.out.println("Private Files:");
-            i = 1;
-            for (String file : list) {
-                int len = file.length();
-                if (file.charAt(len - 1) == 'X') {
-                    System.out.println(i + ". " + file.substring(0, len - 2));
-                    i++;
+        if (type.equals("Your")) {
+            if (list.size() - publicCount > 0) {
+                System.out.println("Private Files:");
+                i = 1;
+                for (String file : list) {
+                    int len = file.length();
+                    if (file.charAt(len - 1) == 'X') {
+                        System.out.println(i + ". " + file.substring(0, len - 1));
+                        i++;
+                    }
                 }
+            } else {
+                System.out.println("No private files to show.");
             }
-        } else {
-            System.out.println("No private files to show.");
         }
 
         System.out.println();
@@ -66,8 +67,7 @@ public class SendableList implements Serializable {
         System.out.println("List of Unread Messages:");
         if (list.size() == 0) {
             System.out.println("No unread messages to show.");
-        }
-        else {
+        } else {
             int i = 1;
             for (String message : list) {
                 System.out.println(i + ". ");
@@ -82,8 +82,7 @@ public class SendableList implements Serializable {
         System.out.println("List of File Requests:");
         if (list.size() == 0) {
             System.out.println("No file requests to show.");
-        }
-        else {
+        } else {
             int i = 1;
             for (String request : list) {
                 System.out.println(i + ". " + request);

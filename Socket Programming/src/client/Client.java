@@ -1,8 +1,11 @@
 package client;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.List;
-import java.util.Locale;
 import java.util.Scanner;
 
 import util.*;
@@ -12,8 +15,12 @@ import static java.lang.System.exit;
 public class Client {
     private static NetworkUtil networkUtil;
     private static String clientName;
+    private static Scanner scanner = new Scanner(System.in);
 
     public Client(String serverAddress, int serverPort) {
+        File file = new File("src/client/to_upload");
+        file.mkdir();
+
         try {
             System.out.print("Enter your username: ");
             Scanner scanner = new Scanner(System.in);
@@ -42,7 +49,6 @@ public class Client {
     }
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
-        Scanner scanner = new Scanner(System.in);
         String serverAddress = "127.0.0.1";
         int serverPort = 33333;
         Client client = new Client(serverAddress, serverPort);
@@ -112,8 +118,7 @@ public class Client {
                     SendableList sendableList = (SendableList) o;
                     sendableList.showMessages();
                 }
-            }
-            else if (choice == 7) {
+            } else if (choice == 7) {
                 // show file requests
                 networkUtil.write(new Request(RequestType.SHOW_FILE_REQUESTS));
                 Object o = networkUtil.read();
@@ -121,15 +126,22 @@ public class Client {
                     SendableList sendableList = (SendableList) o;
                     sendableList.showFileRequests();
                 }
-            }
-            else if (choice == 8) {
+            } else if (choice == 8) {
                 // upload a file
-                System.out.println("Do you want to upload a requested file? (y/n)");
+                System.out.print("Do you want to upload a requested file? (y/n): ");
                 String answer = scanner.next().toLowerCase();
                 if (answer.charAt(0) == 'y') {
                     System.out.print("Enter request ID for the file: ");
+                    String requestID = scanner.next();
+                    networkUtil.write(new IDCheckRequest(requestID));
+                    String response = (String) networkUtil.read();
+                    if (response.charAt(0) == 'y') {
+                        initiateFileUpload(true, requestID);
+                    } else {
+                        System.out.println("There is no upload request with this ID.");
+                    }
                 } else {
-
+                    initiateFileUpload(false, "123");
                 }
             } else if (choice == 9) {
                 // download a file
@@ -143,5 +155,86 @@ public class Client {
                 System.out.println("Invalid choice!");
             }
         }
+    }
+
+    private static void initiateFileUpload(boolean isRequested, String requestID) throws IOException, ClassNotFoundException {
+        scanner.nextLine();
+        System.out.print("Enter file name: ");
+        String fileName = scanner.nextLine();
+
+
+        File file = new File("src/client/to_upload/" + fileName);
+        if (!file.exists()) {
+            System.out.println("File does not exist!");
+            return;
+        }
+
+        long fileSize = (long) file.length();
+
+        boolean isPublic = false;
+        if (!isRequested) {
+            System.out.print("Do you want to keep the file public? (y/n): ");
+            String answer = scanner.next().toLowerCase();
+            if (answer.charAt(0) == 'y') {
+                isPublic = true;
+            }
+        }
+
+        FileInfo fileInfo = new FileInfo(fileName, !isPublic, clientName, fileSize);
+        FileUploadInitiationRequest req = new FileUploadInitiationRequest(fileInfo, isRequested, requestID);
+        networkUtil.write(req);
+
+        Object response = networkUtil.read();
+
+        if (response instanceof FileUploadInitiationResponse) {
+            FileUploadInitiationResponse fileUploadInitiationResponse = (FileUploadInitiationResponse) response;
+            if (fileUploadInitiationResponse.isOK) {
+                System.out.println("File upload initiated successfully.");
+                uploadFile(fileUploadInitiationResponse.chunkSize, fileUploadInitiationResponse.fileID, file, req);
+            } else {
+                System.out.println("File upload initiation failed.");
+            }
+        }
+    }
+
+    private static void uploadFile(long chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
+        FileInputStream fileInputStream = new FileInputStream(file);
+
+        byte[] buffer = new byte[(int) chunkSize];
+        int chunk_number = 0;
+        int read_bytes = 0;
+
+        while (true) {
+            read_bytes = fileInputStream.read(buffer);
+            if (read_bytes == -1) break;
+
+//            if (chunk_number % 500 == 0)
+//                System.out.println("Uploading chunk " + chunk_number + " of " + req.fileInfo.fileName);
+
+            chunk_number++;
+
+//            System.out.println("Read " + read_bytes);
+            networkUtil.write(buffer, 0, read_bytes);
+//            System.out.println("Done Writing One Chunk");
+
+            // tries to read ok here
+            try {
+                String msg = (String) networkUtil.read();
+                if (!msg.equals("ok")) {
+                    System.out.println("Did not receive acknowledgement message from server.");
+                    break;
+                }
+            } catch (SocketTimeoutException e) {
+                System.out.println("Timeout in receiving acknowledgement message from server.");
+//                networkUtil.write("timeout");
+                break;
+            }
+        }
+
+        fileInputStream.close();
+
+        networkUtil.write("done"); // final confirmation
+        String msg = (String) networkUtil.read();
+        System.out.println("Response from Server: " + msg);
     }
 }

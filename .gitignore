@@ -1,4 +1,7 @@
 
 Socket Programming/Socket Programming.iml
+Socket Programming/src/client/to_upload
+Socket Programming/src/storage
+Socket Programming/out
 *.xml
 *.class
