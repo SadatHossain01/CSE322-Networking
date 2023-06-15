@@ -11,17 +11,21 @@ import java.util.List;
 import util.FileRequest;
 import util.Message;
 import util.NetworkUtil;
-import util.SendableFile;
+import util.FileInfo;
 
 public class Server {
     private ServerSocket serverSocket;
     private HashMap<String, NetworkUtil> clientMap;
     private List<String> userList;
-    private HashMap<String, List<SendableFile>> fileMap;
+    private HashMap<String, List<FileInfo>> fileMap;
     private HashMap<String, List<Message>> messageMap;
     private List<FileRequest> fileRequestList;
+    private int MAX_BUFFER_SIZE, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE; // kB
 
-    public Server() {
+    public Server(int MAX_BUFFER_SIZE, int MIN_CHUNK_SIZE, int MAX_CHUNK_SIZE) {
+        this.MAX_BUFFER_SIZE = MAX_BUFFER_SIZE;
+        this.MIN_CHUNK_SIZE = MIN_CHUNK_SIZE;
+        this.MAX_CHUNK_SIZE = MAX_CHUNK_SIZE;
         clientMap = new HashMap<>();
         userList = new ArrayList<>();
         fileMap = new HashMap<>();
@@ -75,7 +79,7 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        Server server = new Server();
+        Server server = new Server(20000, 100, 1000);
     }
 
     public List<String> getUserList(String type) {
@@ -94,7 +98,7 @@ public class Server {
 
     public List<String> getMyFiles(String username) {
         List<String> myFiles = new ArrayList<>();
-        for (SendableFile file : fileMap.get(username)) {
+        for (FileInfo file : fileMap.get(username)) {
             String s = file.getName();
             if (file.isPrivate()) s += "X";
             else s += "O";
@@ -106,7 +110,7 @@ public class Server {
     public List<String> getSharedFiles() {
         List<String> sharedFiles = new ArrayList<>();
         for (String username : fileMap.keySet()) {
-            for (SendableFile file : fileMap.get(username)) {
+            for (FileInfo file : fileMap.get(username)) {
                 if (!file.isPrivate()) {
                     String s = file.getName();
                     s += " (File ID: " + file.getID() + ")O"; // O for public
@@ -122,7 +126,7 @@ public class Server {
     }
 
     public void broadcastRequest(FileRequest fileRequest) {
-        String description = fileRequest.requester + " has requested for a file of following description: (Request ID: " + fileRequest.fileID + ")\n";
+        String description = fileRequest.requester + " has requested for a file of following description: (Request ID: " + fileRequest.requestID + ")\n";
         description += fileRequest.description;
         Message m = new Message(fileRequest.requester, "all", true, description);
         for (String username : clientMap.keySet()) { // broadcast to all the connected clients
@@ -138,5 +142,15 @@ public class Server {
         }
         messageMap.get(username).clear(); // because no option to show read messages, may as well omit the seen field then
         return messages;
+    }
+
+    public List<String> getFileRequests() {
+        List<String> fileRequests = new ArrayList<>();
+        for (FileRequest fileRequest : fileRequestList) {
+            String s = "Requested By: " + fileRequest.requester + ", Request ID: " + fileRequest.requestID + "\n";
+            s += "Short Description: " + fileRequest.description;
+            fileRequests.add(s);
+        }
+        return fileRequests;
     }
 }

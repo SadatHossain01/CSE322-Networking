@@ -2,14 +2,14 @@ package util;
 
 import java.io.Serializable;
 
-public class SendableFile implements Serializable {
+public class FileInfo implements Serializable {
     private String fileName;
     private String fileID;
     private boolean isPrivate;
     private String ownerName;
     private int fileSize;
 
-    public SendableFile(String fileName, boolean isPrivate, String ownerName, int fileSize) {
+    public FileInfo(String fileName, boolean isPrivate, String ownerName, int fileSize) {
         this.fileName = fileName;
         this.isPrivate = isPrivate;
         this.ownerName = ownerName;

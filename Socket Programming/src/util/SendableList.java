@@ -77,4 +77,19 @@ public class SendableList implements Serializable {
         }
         System.out.println();
     }
+
+    public void showFileRequests() {
+        System.out.println("List of File Requests:");
+        if (list.size() == 0) {
+            System.out.println("No file requests to show.");
+        }
+        else {
+            int i = 1;
+            for (String request : list) {
+                System.out.println(i + ". " + request);
+                i++;
+            }
+        }
+        System.out.println();
+    }
 }

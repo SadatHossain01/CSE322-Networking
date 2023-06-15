@@ -37,14 +37,23 @@ public class ServerThread implements Runnable {
                         System.out.println("Sending shared file list to " + username);
                         networkUtil.write(new SendableList(server.getSharedFiles()));
                     } else if (requestType == RequestType.FILE_REQUEST) {
-                        System.out.println(username + " requested a file of ID: " + ((FileRequest) o).fileID);
+                        System.out.println(username + " requested a file of ID: " + ((FileRequest) o).requestID);
                         FileRequest fileRequest = (FileRequest) o;
                         server.addFileRequest(fileRequest);
                         server.broadcastRequest(fileRequest);
                     } else if (requestType == RequestType.MESSAGES) {
                         System.out.println("Showing messages to " + username);
                         networkUtil.write(new SendableList(server.getMessages(username)));
-                    } else if (requestType == RequestType.LOGOUT) {
+                    }
+                    else if (requestType == RequestType.SHOW_FILE_REQUESTS) {
+                        System.out.println("Showing file requests to " + username);
+                        networkUtil.write(new SendableList(server.getFileRequests()));
+                    }
+                    else if (requestType == RequestType.UPLOAD) {
+                    }
+                    else if (requestType == RequestType.DOWNLOAD) {
+                    }
+                    else if (requestType == RequestType.LOGOUT) {
                         server.makeUserInactive(username);
                         networkUtil.write("ok");
                         System.out.println(username + " logged out.");

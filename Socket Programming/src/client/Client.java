@@ -2,6 +2,7 @@ package client;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Scanner;
 
 import util.*;
@@ -54,9 +55,10 @@ public class Client {
             System.out.println("4. Show Shared Files"); // public files of other users
             System.out.println("5. Request a File");
             System.out.println("6. Show Unread Messages");
-            System.out.println("7. Upload A File"); // ask here if it is a requested file
-            System.out.println("8. Download A File");
-            System.out.println("9. Log Out\n");
+            System.out.println("7. Show File Requests");
+            System.out.println("8. Upload A File"); // ask here if it is a requested file
+            System.out.println("9. Download A File");
+            System.out.println("10. Log Out\n");
 
             int choice = scanner.nextInt();
 
@@ -95,7 +97,7 @@ public class Client {
             } else if (choice == 5) {
                 // request a file
                 scanner.nextLine();
-                System.out.print("Enter File ID: ");
+                System.out.print("Enter Request ID: ");
                 String fileID = scanner.next();
                 scanner.nextLine();
 //                If you call the scanner.nextLine() method after any of the other scanner.nextWhatever() methods, the program will skip that call.
@@ -110,11 +112,28 @@ public class Client {
                     SendableList sendableList = (SendableList) o;
                     sendableList.showMessages();
                 }
-            } else if (choice == 7) {
+            }
+            else if (choice == 7) {
+                // show file requests
+                networkUtil.write(new Request(RequestType.SHOW_FILE_REQUESTS));
+                Object o = networkUtil.read();
+                if (o instanceof SendableList) {
+                    SendableList sendableList = (SendableList) o;
+                    sendableList.showFileRequests();
+                }
+            }
+            else if (choice == 8) {
                 // upload a file
-            } else if (choice == 8) {
-                // download a file
+                System.out.println("Do you want to upload a requested file? (y/n)");
+                String answer = scanner.next().toLowerCase();
+                if (answer.charAt(0) == 'y') {
+                    System.out.print("Enter request ID for the file: ");
+                } else {
+
+                }
             } else if (choice == 9) {
+                // download a file
+            } else if (choice == 10) {
                 // log out
                 networkUtil.write(new Request(RequestType.LOGOUT));
                 String response = (String) networkUtil.read();
