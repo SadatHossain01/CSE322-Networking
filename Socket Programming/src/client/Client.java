@@ -218,7 +218,7 @@ public class Client {
         }
 
         byte[] buffer = new byte[(int) chunkSize];
-        int chunk_number = 0;
+//        int chunk_number = 0;
         int read_bytes = 0;
 
         while (true) {
@@ -228,7 +228,7 @@ public class Client {
 //            if (chunk_number % 500 == 0)
 //                System.out.println("Uploading chunk " + chunk_number + " of " + req.fileInfo.fileName);
 
-            chunk_number++;
+//            chunk_number++;
 
 //            System.out.println("Read " + read_bytes);
             networkUtil.write(buffer, 0, read_bytes);
@@ -282,7 +282,7 @@ public class Client {
             fileOutputStream.close();
             System.out.println("File Output Stream Closed");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println(e);
             fileOutputStream.close();
             System.out.println("File Output Stream Closed");
         }
