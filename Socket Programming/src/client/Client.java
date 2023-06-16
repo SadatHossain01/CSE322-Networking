@@ -102,14 +102,15 @@ public class Client {
                 }
             } else if (choice == 5) {
                 // request a file
-                scanner.nextLine();
-                System.out.print("Enter Request ID: ");
-                String fileID = scanner.next();
+//                scanner.nextLine();
+                // no let the server generate a request ID
+//                System.out.print("Enter Request ID: ");
+//                String fileID = scanner.next();
                 scanner.nextLine();
 //                If you call the scanner.nextLine() method after any of the other scanner.nextWhatever() methods, the program will skip that call.
                 System.out.println("Give a short description of the file: ");
                 String description = scanner.nextLine();
-                networkUtil.write(new FileRequest(clientName, fileID, description));
+                networkUtil.write(new FileRequest(clientName, description));
             } else if (choice == 6) {
                 // show unread messages
                 networkUtil.write(new Request(RequestType.MESSAGES));
@@ -178,7 +179,7 @@ public class Client {
             if (answer.charAt(0) == 'y') {
                 isPublic = true;
             }
-        }
+        } else isPublic = true;
 
         FileInfo fileInfo = new FileInfo(fileName, !isPublic, clientName, fileSize);
         FileUploadInitiationRequest req = new FileUploadInitiationRequest(fileInfo, isRequested, requestID);
@@ -198,7 +199,13 @@ public class Client {
     }
 
     private static void uploadFile(long chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
-        FileInputStream fileInputStream = new FileInputStream(file);
+        FileInputStream fileInputStream = null;
+        try {
+            fileInputStream = new FileInputStream(file);
+        } catch (FileNotFoundException e) {
+            System.out.println("File Not Found");
+            return;
+        }
 
         byte[] buffer = new byte[(int) chunkSize];
         int chunk_number = 0;

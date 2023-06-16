@@ -56,13 +56,14 @@ public class Server {
         } else {
             System.out.println(clientName + " logged in.");
             clientMap.put(clientName, networkUtil);
-            fileMap.put(clientName, new ArrayList<>());
-            messageMap.put(clientName, new ArrayList<>());
+
             if (userList.contains(clientName)) {
                 // log user in, but no need to create a new directory
                 networkUtil.write("Welcome back, " + clientName + "!");
             } else {
                 // log user in, and create a new directory
+                fileMap.put(clientName, new ArrayList<>());
+                messageMap.put(clientName, new ArrayList<>());
                 userList.add(clientName);
                 File file = new File("src/storage/" + clientName);
                 if (file.mkdir()) {
@@ -128,7 +129,8 @@ public class Server {
         String description = fileRequest.requester + " has requested for a file of following description: (Request ID: " + fileRequest.requestID + ")\n";
         description += fileRequest.description;
         UserMessage m = new UserMessage(fileRequest.requester, "all", true, description);
-        for (String username : clientMap.keySet()) { // broadcast to all the connected clients
+        // send message to all the registered clients
+        for (String username : userList) { // broadcast to all the connected clients (registered ones)
             messageMap.get(username).add(m);
         }
     }
@@ -182,5 +184,9 @@ public class Server {
 
     public String generateFileID() {
         return FILE_COUNT + 1 + "";
+    }
+
+    public String generateRequestID() {
+        return fileRequestList.size() + 1 + "";
     }
 }

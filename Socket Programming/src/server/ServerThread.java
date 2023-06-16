@@ -45,8 +45,9 @@ public class ServerThread implements Runnable {
                         System.out.println("Sending shared file list to " + username);
                         networkUtil.write(new SendableList(server.getSharedFiles()));
                     } else if (requestType == RequestType.FILE_REQUEST) {
-                        System.out.println(username + " requested a file of ID: " + ((FileRequest) o).requestID);
                         FileRequest fileRequest = (FileRequest) o;
+                        fileRequest.requestID = server.generateRequestID();
+                        System.out.println(username + " requested a file, request ID: " + fileRequest.requestID);
                         server.addFileRequest(fileRequest);
                         server.broadcastRequest(fileRequest);
                     } else if (requestType == RequestType.MESSAGES) {
