@@ -1,9 +1,6 @@
 package client;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.Scanner;
@@ -20,6 +17,8 @@ public class Client {
     public Client(String serverAddress, int serverPort) {
         File file = new File("src/client/to_upload");
         file.mkdir();
+        File file2 = new File("src/client/download");
+        file2.mkdir();
 
         try {
             System.out.print("Enter your username: ");
@@ -146,6 +145,17 @@ public class Client {
                 }
             } else if (choice == 9) {
                 // download a file
+                System.out.print("Enter the file ID of the file you want to download: ");
+                String fileID = scanner.next();
+                networkUtil.write(new FileDownloadRequest(fileID));
+                FileDownloadRequestResponse response = (FileDownloadRequestResponse) networkUtil.read();
+                if (!response.isAccepted) {
+                    System.out.println("From Server: No file with this ID exists.");
+                } else {
+                    String fileName = response.fileName;
+                    int chunkSize = response.chunkSize;
+                    downloadFile(fileName, chunkSize, response.fileSize);
+                }
             } else if (choice == 10) {
                 // log out
                 networkUtil.write(new Request(RequestType.LOGOUT));
@@ -243,5 +253,46 @@ public class Client {
         networkUtil.write("done"); // final confirmation
         String msg = (String) networkUtil.read();
         System.out.println("Response from Server: " + msg);
+    }
+
+    private static void downloadFile(String fileName, int chunkSize, int fileSize) throws IOException, ClassNotFoundException {
+        System.out.println("From Server: File found. Downloading " + fileName + "...");
+        FileOutputStream fileOutputStream = new FileOutputStream("src/client/download/" + fileName);
+        System.out.println("File Output Stream Opened");
+
+        try {
+            byte[] buffer = new byte[chunkSize];
+
+            while (fileSize > 0) {
+                int read_bytes = 0;
+                try {
+                    read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, fileSize));
+                } catch (SocketTimeoutException e) {
+                    System.out.println("Timeout in receiving file " + fileName);
+                    fileOutputStream.close();
+                    return;
+                }
+
+                if (read_bytes == -1) break;
+
+                fileOutputStream.write(buffer, 0, read_bytes);
+                fileSize -= read_bytes;
+            }
+
+            fileOutputStream.close();
+            System.out.println("File Output Stream Closed");
+        } catch (IOException e) {
+            e.printStackTrace();
+            fileOutputStream.close();
+            System.out.println("File Output Stream Closed");
+        }
+
+        String final_msg = (String) networkUtil.read();
+        if (final_msg.equals("done")) {
+            File file = new File("src/storage/" + clientName + "/" + fileName);
+            System.out.println("File " + fileName + " downloaded successfully.");
+        } else {
+            System.out.println("File download failed.");
+        }
     }
 }

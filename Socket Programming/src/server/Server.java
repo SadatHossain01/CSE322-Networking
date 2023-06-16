@@ -100,6 +100,7 @@ public class Server {
         List<String> myFiles = new ArrayList<>();
         for (FileInfo file : fileMap.get(username)) {
             String s = file.fileName;
+            s += " (File ID: " + file.fileID + ")";
             if (file.isPrivate) s += "X";
             else s += "O";
             myFiles.add(s);
@@ -188,5 +189,16 @@ public class Server {
 
     public String generateRequestID() {
         return fileRequestList.size() + 1 + "";
+    }
+
+    public FileInfo checkFileAvailability(String fileID) {
+        for (String username : fileMap.keySet()) {
+            for (FileInfo file : fileMap.get(username)) {
+                if (file.fileID.equals(fileID)) {
+                    return file;
+                }
+            }
+        }
+        return null;
     }
 }

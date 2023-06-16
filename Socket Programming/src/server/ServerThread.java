@@ -2,10 +2,7 @@ package server;
 
 import util.*;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.SocketTimeoutException;
 import java.util.Random;
 
@@ -14,6 +11,7 @@ public class ServerThread implements Runnable {
     private NetworkUtil networkUtil;
     private String username;
     private Server server;
+    private boolean isConnected;
     Random random = new Random();
 
     public ServerThread(String username, Server server, NetworkUtil networkUtil) {
@@ -21,6 +19,7 @@ public class ServerThread implements Runnable {
         this.username = username;
         this.server = server;
         this.thr = new Thread(this);
+        isConnected = true;
         thr.start();
     }
 
@@ -85,19 +84,33 @@ public class ServerThread implements Runnable {
                                 networkUtil.write("failed upload");
                             }
                         }
-                    } else if (requestType == RequestType.DOWNLOAD) {
+                    } else if (requestType == RequestType.DOWNLOAD_REQUEST) {
+                        FileDownloadRequest fileDownloadRequest = (FileDownloadRequest) o;
+                        String fileID = fileDownloadRequest.fileID;
+                        FileInfo fileInfo = server.checkFileAvailability(fileID);
+                        if (fileInfo == null) {
+                            networkUtil.write(new FileDownloadRequestResponse(false));
+                            System.out.println("Rejected download request from " + username + " for no match with any file ID");
+                        }
+                        else {
+                            networkUtil.write(new FileDownloadRequestResponse(true, fileInfo.fileName, (int)server.MAX_CHUNK_SIZE, (int)fileInfo.fileSize));
+                            System.out.println("Accepted download request from " + username + " for file ID: " + fileID);
+                            sendFile(fileInfo);
+                        }
                     } else if (requestType == RequestType.LOGOUT) {
                         server.makeUserInactive(username);
                         networkUtil.write("ok");
                         System.out.println(username + " logged out.");
+                        isConnected = false;
                         networkUtil.closeConnection();
                         break;
                     }
                 }
             }
         } catch (Exception e) {
-//            System.out.println(e);
+            System.out.println(e);
             server.makeUserInactive(username);
+            isConnected = false;
             System.out.println(username + " got disconnected.");
         } finally {
             try {
@@ -130,11 +143,14 @@ public class ServerThread implements Runnable {
             int chunk_number = 0;
             System.out.println("File Size: " + fileSize + " bytes");
 
-            while (fileSize > 0) {
+            while (fileSize > 0 && isConnected) {
                 int read_bytes;
                 try {
 //                    System.out.println("Want to read a chunk");
-                    read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, fileSize));
+                    if (isConnected)
+                        read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, fileSize));
+                    else
+                        throw new SocketTimeoutException();
 //                    System.out.println("Read a chunk");
                 } catch (SocketTimeoutException e) {
                     server.CUR_BUFFER_SIZE -= chunkSize;
@@ -179,5 +195,32 @@ public class ServerThread implements Runnable {
         } else {
             return false;
         }
+    }
+
+    private void sendFile(FileInfo fileInfo) throws IOException {
+        FileInputStream fileInputStream = null;
+        try {
+            fileInputStream = new FileInputStream("src/storage/" + fileInfo.ownerName + "/" + fileInfo.fileName);
+        } catch (FileNotFoundException e) {
+            System.out.println("File not found");
+            return;
+        }
+
+        byte[] buffer = new byte[(int) server.MAX_CHUNK_SIZE];
+        int chunk_number = 0, read_bytes = 0;
+
+        while (true) {
+            read_bytes = fileInputStream.read(buffer);
+            if (read_bytes == -1) break;
+
+            chunk_number++;
+
+            networkUtil.write(buffer, 0, read_bytes);
+
+            // no wait for message from client
+        }
+
+        fileInputStream.close();
+        networkUtil.write("done");
     }
 }
