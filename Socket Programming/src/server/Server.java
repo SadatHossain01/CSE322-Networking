@@ -18,9 +18,11 @@ public class Server {
     private HashMap<String, List<UserMessage>> messageMap;
     private List<FileRequest> fileRequestList;
     private int FILE_COUNT;
-    public long CUR_BUFFER_SIZE, MAX_BUFFER_SIZE, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE; // in bytes
+    public int MIN_CHUNK_SIZE, MAX_CHUNK_SIZE;
+    public long CUR_BUFFER_SIZE, MAX_BUFFER_SIZE; // in bytes
+    public HashMap<String, List<byte[]>> bufferMap; // fileID -> bufferArrays
 
-    public Server(long MAX_BUFFER_SIZE, long MIN_CHUNK_SIZE, long MAX_CHUNK_SIZE) {
+    public Server(long MAX_BUFFER_SIZE, int MIN_CHUNK_SIZE, int MAX_CHUNK_SIZE) {
         this.MAX_BUFFER_SIZE = MAX_BUFFER_SIZE;
         this.MIN_CHUNK_SIZE = MIN_CHUNK_SIZE;
         this.MAX_CHUNK_SIZE = MAX_CHUNK_SIZE;
@@ -30,6 +32,7 @@ public class Server {
         fileMap = new HashMap<>();
         fileRequestList = new ArrayList<>();
         messageMap = new HashMap<>();
+        bufferMap = new HashMap<>();
 
         try {
             System.out.println("Server started...");

@@ -180,7 +180,7 @@ public class Client {
             return;
         }
 
-        long fileSize = (long) file.length();
+        long fileSize = file.length();
 
         boolean isPublic = false;
         if (!isRequested) {
@@ -208,7 +208,7 @@ public class Client {
         }
     }
 
-    private static void uploadFile(long chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
+    private static void uploadFile(int chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
         FileInputStream fileInputStream = null;
         try {
             fileInputStream = new FileInputStream(file);
@@ -217,7 +217,7 @@ public class Client {
             return;
         }
 
-        byte[] buffer = new byte[(int) chunkSize];
+        byte[] buffer = new byte[chunkSize];
 //        int chunk_number = 0;
         int read_bytes = 0;
 
@@ -255,7 +255,7 @@ public class Client {
         System.out.println("Response from Server: " + msg);
     }
 
-    private static void downloadFile(String fileName, int chunkSize, int fileSize) throws IOException, ClassNotFoundException {
+    private static void downloadFile(String fileName, int chunkSize, long fileSize) throws IOException, ClassNotFoundException {
         System.out.println("From Server: File found. Downloading " + fileName + "...");
         FileOutputStream fileOutputStream = new FileOutputStream("src/client/download/" + fileName);
         System.out.println("File Output Stream Opened");
@@ -266,7 +266,7 @@ public class Client {
             while (fileSize > 0) {
                 int read_bytes = 0;
                 try {
-                    read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, fileSize));
+                    read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, (int) fileSize));
                 } catch (SocketTimeoutException e) {
                     System.out.println("Timeout in receiving file " + fileName);
                     fileOutputStream.close();

@@ -36,6 +36,10 @@ public class NetworkUtil {
         oos.close();
     }
 
+    public void setTimeout(int timeout) throws IOException {
+        socket.setSoTimeout(timeout);
+    }
+
     public int read(byte[] buf, int off, int len) throws IOException {
 //        buf - the buffer into which the data is read
 //        off - the start offset in the destination array buf

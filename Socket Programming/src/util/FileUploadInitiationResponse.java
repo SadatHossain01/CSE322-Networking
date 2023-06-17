@@ -3,11 +3,11 @@ package util;
 import java.io.Serializable;
 
 public class FileUploadInitiationResponse implements Serializable {
-    public long chunkSize;
+    public int chunkSize;
     public String fileID;
     public boolean isOK;
 
-    public FileUploadInitiationResponse(long chunkSize, String fileID) {
+    public FileUploadInitiationResponse(int chunkSize, String fileID) {
         this.chunkSize = chunkSize;
         this.fileID = fileID;
         isOK = true;
