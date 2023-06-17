@@ -117,7 +117,7 @@ public class Server {
             for (FileInfo file : fileMap.get(username)) {
                 if (!file.isPrivate) {
                     String s = file.fileName;
-                    s += " (File ID: " + file.fileID + ")O"; // O for public
+                    s += " (File ID: " + file.fileID + ", Owner: " + file.ownerName + ")O"; // ) for public
                     sharedFiles.add(s);
                 }
             }
@@ -135,6 +135,7 @@ public class Server {
         UserMessage m = new UserMessage(fileRequest.requester, "all", true, description);
         // send message to all the registered clients
         for (String username : userList) { // broadcast to all the connected clients (registered ones)
+            if (username.equals(fileRequest.requester)) continue; // do not send message to the requester
             messageMap.get(username).add(m);
         }
     }
@@ -178,7 +179,7 @@ public class Server {
 
             for (FileRequest fileRequest : fileRequestList) {
                 if (fileRequest.requestID.equals(req_id)) {
-                    UserMessage m = new UserMessage(req.fileInfo.ownerName, fileRequest.requester, false, "File " + req.fileInfo.fileName + " has been uploaded by " + req.fileInfo.ownerName + " (File ID: " + fileID + ")");
+                    UserMessage m = new UserMessage(req.fileInfo.ownerName, fileRequest.requester, false, "File " + req.fileInfo.fileName + " has been uploaded by " + req.fileInfo.ownerName + " (File ID: " + fileID + ", Request ID: " + req_id + ")");
                     messageMap.get(fileRequest.requester).add(m);
                     break;
                 }

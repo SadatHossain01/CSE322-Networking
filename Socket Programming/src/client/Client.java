@@ -40,17 +40,10 @@ public class Client {
         }
     }
 
-    private static void showUsers(List<String> users, String userType) {
-        System.out.println("List of " + userType + " Users:");
-        for (String user : users) {
-            System.out.println(user);
-        }
-    }
-
     public static void main(String[] args) throws IOException, ClassNotFoundException {
         String serverAddress = "127.0.0.1";
         int serverPort = 33333;
-        Client client = new Client(serverAddress, serverPort);
+        new Client(serverAddress, serverPort);
 
         while (true) {
             System.out.println("Menu:");
@@ -101,10 +94,6 @@ public class Client {
                 }
             } else if (choice == 5) {
                 // request a file
-//                scanner.nextLine();
-                // no let the server generate a request ID
-//                System.out.print("Enter Request ID: ");
-//                String fileID = scanner.next();
                 scanner.nextLine();
 //                If you call the scanner.nextLine() method after any of the other scanner.nextWhatever() methods, the program will skip that call.
                 System.out.println("Give a short description of the file: ");
@@ -136,16 +125,17 @@ public class Client {
                     networkUtil.write(new IDCheckRequest(requestID));
                     String response = (String) networkUtil.read();
                     if (response.charAt(0) == 'y') {
+                        System.out.println("Server: Upload request found. Proceeding to upload...");
                         initiateFileUpload(true, requestID);
                     } else {
-                        System.out.println("There is no upload request with this ID.");
+                        System.out.println("Server: There is no upload request with this ID.");
                     }
                 } else {
                     initiateFileUpload(false, "123");
                 }
             } else if (choice == 9) {
                 // download a file
-                System.out.print("Enter the file ID of the file you want to download: ");
+                System.out.print("Enter the ID of the file you want to download: ");
                 String fileID = scanner.next();
                 networkUtil.write(new FileDownloadRequest(fileID));
                 FileDownloadRequestResponse response = (FileDownloadRequestResponse) networkUtil.read();
@@ -154,6 +144,7 @@ public class Client {
                 } else {
                     String fileName = response.fileName;
                     int chunkSize = response.chunkSize;
+                    System.out.println("From Server: File found. Downloading " + fileName + "...");
                     downloadFile(fileName, chunkSize, response.fileSize);
                 }
             } else if (choice == 10) {
@@ -176,7 +167,7 @@ public class Client {
 
         File file = new File("src/client/to_upload/" + fileName);
         if (!file.exists()) {
-            System.out.println("File does not exist!");
+            System.out.println("File does not exist locally!");
             return;
         }
 
@@ -200,7 +191,7 @@ public class Client {
         if (response instanceof FileUploadInitiationResponse) {
             FileUploadInitiationResponse fileUploadInitiationResponse = (FileUploadInitiationResponse) response;
             if (fileUploadInitiationResponse.isOK) {
-                System.out.println("File upload initiated successfully.");
+                System.out.println("File upload initiated.");
                 uploadFile(fileUploadInitiationResponse.chunkSize, fileUploadInitiationResponse.fileID, file, req);
             } else {
                 System.out.println("File upload initiation failed.");
@@ -209,32 +200,26 @@ public class Client {
     }
 
     private static void uploadFile(int chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
-        FileInputStream fileInputStream = null;
+        FileInputStream fileInputStream;
         try {
             fileInputStream = new FileInputStream(file);
         } catch (FileNotFoundException e) {
-            System.out.println("File Not Found");
+            System.out.println("File does not exist locally!");
             return;
         }
 
         byte[] buffer = new byte[chunkSize];
-//        int chunk_number = 0;
         int read_bytes = 0;
+
+        networkUtil.setTimeout(30000); // for reading server's acknowledgement message
 
         while (true) {
             read_bytes = fileInputStream.read(buffer);
             if (read_bytes == -1) break;
 
-//            if (chunk_number % 500 == 0)
-//                System.out.println("Uploading chunk " + chunk_number + " of " + req.fileInfo.fileName);
-
-//            chunk_number++;
-
-//            System.out.println("Read " + read_bytes);
             networkUtil.write(buffer, 0, read_bytes);
-//            System.out.println("Done Writing One Chunk");
 
-            // tries to read ok here
+            // tries to read acknowledgement message here
             try {
                 String msg = (String) networkUtil.read();
                 if (!msg.equals("ok")) {
@@ -248,6 +233,8 @@ public class Client {
             }
         }
 
+        networkUtil.setTimeout(0);
+
         fileInputStream.close();
 
         networkUtil.write("done"); // final confirmation
@@ -256,9 +243,7 @@ public class Client {
     }
 
     private static void downloadFile(String fileName, int chunkSize, long fileSize) throws IOException, ClassNotFoundException {
-        System.out.println("From Server: File found. Downloading " + fileName + "...");
         FileOutputStream fileOutputStream = new FileOutputStream("src/client/download/" + fileName);
-        System.out.println("File Output Stream Opened");
 
         try {
             byte[] buffer = new byte[chunkSize];
@@ -280,11 +265,9 @@ public class Client {
             }
 
             fileOutputStream.close();
-            System.out.println("File Output Stream Closed");
         } catch (IOException e) {
             System.out.println(e);
             fileOutputStream.close();
-            System.out.println("File Output Stream Closed");
         }
 
         String final_msg = (String) networkUtil.read();

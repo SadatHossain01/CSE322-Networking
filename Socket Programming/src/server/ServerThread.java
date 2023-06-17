@@ -74,15 +74,14 @@ public class ServerThread implements Runnable {
                         } else {
                             int chunkSize = generateRandomNumber(server.MIN_CHUNK_SIZE, server.MAX_CHUNK_SIZE);
                             String fileID = server.generateFileID();
+                            System.out.println("File size fine, chunk size: " + chunkSize + ", file ID: " + fileID);
                             networkUtil.write(new FileUploadInitiationResponse(chunkSize, fileID));
                             boolean success = receiveFile((FileUploadInitiationRequest) o, chunkSize);
                             if (success) {
                                 System.out.println("Successfully received file from " + username);
-                                networkUtil.write("successful upload");
                                 server.addFile((FileUploadInitiationRequest) o, fileID);
                             } else {
                                 System.out.println("Failed to receive file from " + username);
-                                networkUtil.write("failed upload");
                             }
                         }
                     } else if (requestType == RequestType.DOWNLOAD_REQUEST) {
@@ -94,7 +93,7 @@ public class ServerThread implements Runnable {
                             System.out.println("Rejected download request from " + username + " for no match with any file ID");
                         } else {
                             networkUtil.write(new FileDownloadRequestResponse(true, fileInfo.fileName, server.MAX_CHUNK_SIZE, fileInfo.fileSize));
-                            System.out.println("Accepted download request from " + username + " for file ID: " + fileID);
+                            System.out.println("Accepted download request from " + username + " for file ID: " + fileID + ", starting download...");
                             sendFile(fileInfo);
                         }
                     } else if (requestType == RequestType.LOGOUT) {
@@ -122,8 +121,7 @@ public class ServerThread implements Runnable {
     private int generateRandomNumber(int a, int b) { // for chunk size
         int aa = random.nextInt() % (b - a + 1);
         while (aa < 0) aa += (b - a + 1);
-        int rep = aa + a;
-        return rep;
+        return aa + a;
     }
 
     private boolean receiveFile(FileUploadInitiationRequest fileDetail, int chunkSize) throws IOException, ClassNotFoundException {
@@ -137,40 +135,28 @@ public class ServerThread implements Runnable {
             server.bufferMap.put(fileDetail.fileInfo.fileID, new ArrayList<>());
             List<byte[]> curBufferList = server.bufferMap.get(fileDetail.fileInfo.fileID);
 
-//            int chunk_number = 0;
             System.out.println("File Size: " + fileSize + " bytes");
 
             while (fileSize > 0) {
                 byte[] buffer = new byte[chunkSize];
-                networkUtil.setTimeout(30000);
                 try {
-//                    System.out.println("Want to read a chunk");
                     read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, (int) fileSize));
                     // check if the file ID matches with the initial ID here after introducing the wrapper class
                     curBufferList.add(buffer);
-//                    System.out.println("Read a chunk");
                 } catch (Exception e) {
-                    server.CUR_BUFFER_SIZE -= chunkSize;
-                    server.bufferMap.remove(fileDetail.fileInfo.fileID);
-//                    fileOutputStream.close();
                     if (e instanceof SocketTimeoutException) {
                         System.out.println("File upload from " + username + " failed due to timeout.");
                     } else if (e instanceof SocketException) {
                         System.out.println("Client got disconnected while uploading file " + fileInfo.fileName);
                     } else System.out.println(e);
-                    networkUtil.setTimeout(0);
+
+                    closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
+
                     return false;
                 }
 
-                networkUtil.setTimeout(0);
 
                 if (read_bytes == -1) break; // -1 is returned when the end of the stream is reached.
-
-//            if (chunk_number % 500 == 0)
-//                System.out.println("Chunk number " + chunk_number + " received from " + username);
-//            chunk_number++;
-
-//                fileOutputStream.write(buffer, 0, read_bytes);
 
                 fileSize -= read_bytes;
 
@@ -178,27 +164,26 @@ public class ServerThread implements Runnable {
                     networkUtil.write("ok");
                 } catch (SocketException e) {
                     System.out.println("Client got disconnected while uploading file " + fileInfo.fileName);
-                    server.CUR_BUFFER_SIZE -= chunkSize;
-                    server.bufferMap.remove(fileDetail.fileInfo.fileID);
-//                    fileOutputStream.close();
+
+                    closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
 
                     return false;
                 }
             }
 
             // seems ok as of now, next check the file size and write to file
-//            fileOutputStream.close();
-//            System.out.println("File Output Stream Closed");
-
             return doFinalCheck(curBufferList, fileInfo, chunkSize, read_bytes);
         } catch (Exception e) {
-            server.CUR_BUFFER_SIZE -= chunkSize;
-            server.bufferMap.remove(fileDetail.fileInfo.fileID);
-//            fileOutputStream.close();
-//            System.out.println("File Output Stream Closed");
             System.out.println(e);
+            closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
             return false;
         }
+    }
+
+    private void closeStuffs(int chunkSize, String fileID, String error_message) {
+        server.CUR_BUFFER_SIZE -= chunkSize;
+        server.bufferMap.remove(fileID);
+        if (!error_message.isEmpty()) System.out.println(error_message);
     }
 
     private boolean doFinalCheck(List<byte[]> curBufferList, FileInfo fileInfo, int chunkSize, int lastChunkSize) throws IOException, ClassNotFoundException {
@@ -215,16 +200,17 @@ public class ServerThread implements Runnable {
             }
             fileOutputStream.close();
 
-            server.CUR_BUFFER_SIZE -= chunkSize;
-            server.bufferMap.remove(fileInfo.fileID);
+            closeStuffs(chunkSize, fileInfo.fileID, "");
 
             File file = new File("src/storage/" + username + "/" + fileInfo.fileName);
             if (file.length() != fileInfo.fileSize) {
                 System.out.println("File Length: " + file.length() + " Expected: " + fileInfo.fileSize);
                 System.out.println("File Size Mismatch found");
                 file.delete();
+                networkUtil.write("File size mismatch found, please try again.");
                 return false;
             }
+            networkUtil.write("Final check done, upload successful");
             return true;
         } else {
             return false;
@@ -232,23 +218,20 @@ public class ServerThread implements Runnable {
     }
 
     private void sendFile(FileInfo fileInfo) throws IOException {
-        FileInputStream fileInputStream = null;
+        FileInputStream fileInputStream;
         try {
             fileInputStream = new FileInputStream("src/storage/" + fileInfo.ownerName + "/" + fileInfo.fileName);
         } catch (FileNotFoundException e) {
-            System.out.println("File not found");
+            System.out.println("File not found in server");
             return;
         }
 
         byte[] buffer = new byte[server.MAX_CHUNK_SIZE];
-//        int chunk_number = 0;
         int read_bytes = 0;
 
         while (true) {
             read_bytes = fileInputStream.read(buffer);
             if (read_bytes == -1) break;
-
-//            chunk_number++;
 
             networkUtil.write(buffer, 0, read_bytes);
 
