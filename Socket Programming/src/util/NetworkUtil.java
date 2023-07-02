@@ -53,6 +53,10 @@ public class NetworkUtil {
         flush();
     }
 
+    public int available() throws IOException {
+        return socket.getInputStream().available();
+    }
+
     public void flush() throws IOException {
         oos.flush();
     }

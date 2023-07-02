@@ -2,7 +2,6 @@ package client;
 
 import java.io.*;
 import java.net.SocketTimeoutException;
-import java.util.List;
 import java.util.Scanner;
 
 import util.*;
@@ -62,7 +61,7 @@ public class Client {
 
             if (choice == 1) {
                 // show all registered users
-                networkUtil.write(new Request(RequestType.REGISTERED_USERLIST));
+                networkUtil.write(new Request(RequestType.SHOW_REGISTERED_USERLIST));
                 Object o = networkUtil.read();
                 if (o instanceof SendableList) {
                     SendableList sendableList = (SendableList) o;
@@ -70,7 +69,7 @@ public class Client {
                 }
             } else if (choice == 2) {
                 // show all active users
-                networkUtil.write(new Request(RequestType.ACTIVE_USERLIST));
+                networkUtil.write(new Request(RequestType.SHOW_ACTIVE_USERLIST));
                 Object o = networkUtil.read();
                 if (o instanceof SendableList) {
                     SendableList sendableList = (SendableList) o;
@@ -78,7 +77,7 @@ public class Client {
                 }
             } else if (choice == 3) {
                 // show my files
-                networkUtil.write(new Request(RequestType.MY_FILES));
+                networkUtil.write(new Request(RequestType.SHOW_MY_FILES));
                 Object o = networkUtil.read();
                 if (o instanceof SendableList) {
                     SendableList sendableList = (SendableList) o;
@@ -86,7 +85,7 @@ public class Client {
                 }
             } else if (choice == 4) {
                 // show shared files
-                networkUtil.write(new Request(RequestType.SHARED_FILES));
+                networkUtil.write(new Request(RequestType.SHOW_SHARED_FILES));
                 Object o = networkUtil.read();
                 if (o instanceof SendableList) {
                     SendableList sendableList = (SendableList) o;
@@ -101,7 +100,7 @@ public class Client {
                 networkUtil.write(new FileRequest(clientName, description));
             } else if (choice == 6) {
                 // show unread messages
-                networkUtil.write(new Request(RequestType.MESSAGES));
+                networkUtil.write(new Request(RequestType.SHOW_MESSAGES));
                 Object o = networkUtil.read();
                 if (o instanceof SendableList) {
                     SendableList sendableList = (SendableList) o;
@@ -122,7 +121,7 @@ public class Client {
                 if (answer.charAt(0) == 'y') {
                     System.out.print("Enter request ID for the file: ");
                     String requestID = scanner.next();
-                    networkUtil.write(new IDCheckRequest(requestID));
+                    networkUtil.write(new MatchFileRequestID(requestID));
                     String response = (String) networkUtil.read();
                     if (response.charAt(0) == 'y') {
                         System.out.println("Server: Upload request found. Proceeding to upload...");
@@ -143,9 +142,8 @@ public class Client {
                     System.out.println("From Server: No file with this ID exists.");
                 } else {
                     String fileName = response.fileName;
-                    int chunkSize = response.chunkSize;
                     System.out.println("From Server: File found. Downloading " + fileName + "...");
-                    downloadFile(fileName, chunkSize, response.fileSize);
+                    downloadFile(fileName, response.chunkSize, response.fileSize);
                 }
             } else if (choice == 10) {
                 // log out
@@ -192,14 +190,14 @@ public class Client {
             FileUploadInitiationResponse fileUploadInitiationResponse = (FileUploadInitiationResponse) response;
             if (fileUploadInitiationResponse.isOK) {
                 System.out.println("File upload initiated.");
-                uploadFile(fileUploadInitiationResponse.chunkSize, fileUploadInitiationResponse.fileID, file, req);
+                uploadFile(fileUploadInitiationResponse.chunkSize, file);
             } else {
                 System.out.println("File upload initiation failed.");
             }
         }
     }
 
-    private static void uploadFile(int chunkSize, String fileID, File file, FileUploadInitiationRequest req) throws IOException, ClassNotFoundException {
+    private static void uploadFile(int chunkSize, File file) throws IOException, ClassNotFoundException {
         FileInputStream fileInputStream;
         try {
             fileInputStream = new FileInputStream(file);
@@ -209,9 +207,10 @@ public class Client {
         }
 
         byte[] buffer = new byte[chunkSize];
-        int read_bytes = 0;
+        int read_bytes;
 
         networkUtil.setTimeout(30000); // for reading server's acknowledgement message
+        boolean success = true;
 
         while (true) {
             read_bytes = fileInputStream.read(buffer);
@@ -222,24 +221,27 @@ public class Client {
             // tries to read acknowledgement message here
             try {
                 String msg = (String) networkUtil.read();
-                if (!msg.equals("ok")) {
+                if (!msg.equals("ack")) {
                     System.out.println("Did not receive acknowledgement message from server.");
+                    success = false;
                     break;
                 }
             } catch (SocketTimeoutException e) {
                 System.out.println("Timeout in receiving acknowledgement message from server.");
-//                networkUtil.write("timeout");
+                networkUtil.write("timeout");
+                success = false;
                 break;
             }
         }
 
         networkUtil.setTimeout(0);
-
         fileInputStream.close();
 
-        networkUtil.write("done"); // final confirmation
-        String msg = (String) networkUtil.read();
-        System.out.println("Response from Server: " + msg);
+        if (success) {
+            networkUtil.write("done"); // final confirmation
+            String msg = (String) networkUtil.read();
+            System.out.println("Response from Server: " + msg);
+        }
     }
 
     private static void downloadFile(String fileName, int chunkSize, long fileSize) throws IOException, ClassNotFoundException {
@@ -249,7 +251,7 @@ public class Client {
             byte[] buffer = new byte[chunkSize];
 
             while (fileSize > 0) {
-                int read_bytes = 0;
+                int read_bytes;
                 try {
                     read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, (int) fileSize));
                 } catch (SocketTimeoutException e) {
@@ -272,7 +274,6 @@ public class Client {
 
         String final_msg = (String) networkUtil.read();
         if (final_msg.equals("done")) {
-            File file = new File("src/storage/" + clientName + "/" + fileName);
             System.out.println("File " + fileName + " downloaded successfully.");
         } else {
             System.out.println("File download failed.");

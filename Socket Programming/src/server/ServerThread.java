@@ -32,16 +32,16 @@ public class ServerThread implements Runnable {
                 if (o instanceof Request) {
                     RequestType requestType = ((Request) o).requestType;
 
-                    if (requestType == RequestType.REGISTERED_USERLIST) {
+                    if (requestType == RequestType.SHOW_REGISTERED_USERLIST) {
                         System.out.println("Sending registered user list to " + username);
                         networkUtil.write(new SendableList(server.getUserList("registered")));
-                    } else if (requestType == RequestType.ACTIVE_USERLIST) {
+                    } else if (requestType == RequestType.SHOW_ACTIVE_USERLIST) {
                         System.out.println("Sending active user list to " + username);
                         networkUtil.write(new SendableList(server.getUserList("active")));
-                    } else if (requestType == RequestType.MY_FILES) {
+                    } else if (requestType == RequestType.SHOW_MY_FILES) {
                         System.out.println("Sending personal file list to " + username);
                         networkUtil.write(new SendableList(server.getMyFiles(username)));
-                    } else if (requestType == RequestType.SHARED_FILES) {
+                    } else if (requestType == RequestType.SHOW_SHARED_FILES) {
                         System.out.println("Sending shared file list to " + username);
                         networkUtil.write(new SendableList(server.getSharedFiles()));
                     } else if (requestType == RequestType.FILE_REQUEST) {
@@ -50,14 +50,15 @@ public class ServerThread implements Runnable {
                         System.out.println(username + " requested a file, request ID: " + fileRequest.requestID);
                         server.addFileRequest(fileRequest);
                         server.broadcastRequest(fileRequest);
-                    } else if (requestType == RequestType.MESSAGES) {
+                    } else if (requestType == RequestType.SHOW_MESSAGES) {
                         System.out.println("Showing messages to " + username);
                         networkUtil.write(new SendableList(server.getMessages(username)));
                     } else if (requestType == RequestType.SHOW_FILE_REQUESTS) {
                         System.out.println("Showing file requests to " + username);
                         networkUtil.write(new SendableList(server.getFileRequests()));
-                    } else if (requestType == RequestType.REQUESTED_UPLOAD) {
-                        String requestID = ((IDCheckRequest) o).requestID;
+                    } else if (requestType == RequestType.REQUESTED_UPLOAD_CROSSCHECK) {
+                        // crosscheck if the file_request ID for this upload really exists
+                        String requestID = ((MatchFileRequestID) o).requestID;
                         boolean accepted = server.checkRequestID(requestID);
                         if (accepted) {
                             System.out.println("Go on with upload from " + username + " for request ID: " + requestID);
@@ -66,7 +67,7 @@ public class ServerThread implements Runnable {
                             System.out.println("Rejected upload request from " + username + " for no match with any request ID");
                             networkUtil.write("no");
                         }
-                    } else if (requestType == RequestType.UPLOAD) {
+                    } else if (requestType == RequestType.UPLOAD_INITIATION) {
                         long fileSize = ((FileUploadInitiationRequest) o).fileInfo.fileSize;
                         if (fileSize + server.CUR_BUFFER_SIZE > server.MAX_BUFFER_SIZE) {
                             networkUtil.write(new FileUploadInitiationResponse(false));
@@ -90,7 +91,7 @@ public class ServerThread implements Runnable {
                         FileInfo fileInfo = server.checkFileAvailability(fileID);
                         if (fileInfo == null) {
                             networkUtil.write(new FileDownloadRequestResponse(false));
-                            System.out.println("Rejected download request from " + username + " for no match with any file ID");
+                            System.out.println("Rejected download request from " + username + ", no match with any file ID");
                         } else {
                             networkUtil.write(new FileDownloadRequestResponse(true, fileInfo.fileName, server.MAX_CHUNK_SIZE, fileInfo.fileSize));
                             System.out.println("Accepted download request from " + username + " for file ID: " + fileID + ", starting download...");
@@ -124,7 +125,7 @@ public class ServerThread implements Runnable {
         return aa + a;
     }
 
-    private boolean receiveFile(FileUploadInitiationRequest fileDetail, int chunkSize) throws IOException, ClassNotFoundException {
+    private boolean receiveFile(FileUploadInitiationRequest fileDetail, int chunkSize) {
         FileInfo fileInfo = fileDetail.fileInfo;
         int read_bytes = 0;
         System.out.println("Receiving file " + fileInfo.fileName + " from " + username);
@@ -141,7 +142,6 @@ public class ServerThread implements Runnable {
                 byte[] buffer = new byte[chunkSize];
                 try {
                     read_bytes = networkUtil.read(buffer, 0, Math.min(buffer.length, (int) fileSize));
-                    // check if the file ID matches with the initial ID here after introducing the wrapper class
                     curBufferList.add(buffer);
                 } catch (Exception e) {
                     if (e instanceof SocketTimeoutException) {
@@ -160,14 +160,25 @@ public class ServerThread implements Runnable {
 
                 fileSize -= read_bytes;
 
-                try {
-                    networkUtil.write("ok");
-                } catch (SocketException e) {
-                    System.out.println("Client got disconnected while uploading file " + fileInfo.fileName);
+                // for testing
+//                Thread.sleep(32000);
 
-                    closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
-
-                    return false;
+                if (networkUtil.available() > 0) {
+                    String s = (String) networkUtil.read();
+                    System.out.println("Received message from client: " + s);
+                    if (s.equals("timeout")) {
+                        System.out.println("File upload from " + username + " failed due to timeout.");
+                        closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
+                        return false;
+                    }
+                } else {
+                    try {
+                        networkUtil.write("ack");
+                    } catch (SocketException e) {
+                        System.out.println("Client got disconnected while uploading file " + fileInfo.fileName);
+                        closeStuffs(chunkSize, fileDetail.fileInfo.fileID, "");
+                        return false;
+                    }
                 }
             }
 
@@ -207,10 +218,10 @@ public class ServerThread implements Runnable {
                 System.out.println("File Length: " + file.length() + " Expected: " + fileInfo.fileSize);
                 System.out.println("File Size Mismatch found");
                 file.delete();
-                networkUtil.write("File size mismatch found, please try again.");
+                networkUtil.write("File size mismatch found, upload failed.");
                 return false;
             }
-            networkUtil.write("Final check done, upload successful");
+            networkUtil.write("Final check done, upload successful.");
             return true;
         } else {
             return false;
