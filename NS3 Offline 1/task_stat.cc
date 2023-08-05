@@ -24,13 +24,16 @@
 #include "ns3/ssid.h"
 #include "ns3/yans-wifi-helper.h"
 
+#include <fstream>
+
 #define PACKET_SIZE 1024 // in bytes
+#define TX_RANGE 5
 
 /*
 Network Topology
     s0 ------           --------r0
     s1 ------           --------r1
-    s2 ------x --p2--p y--------r2
+    s2 ------x --p2p-- y--------r2
     s3 ------           --------r3
     s4 ------           --------r4
 */
@@ -39,25 +42,47 @@ NS_LOG_COMPONENT_DEFINE("TaskStat");
 
 using namespace ns3;
 
+double packetReceived = 0;
+double packetSent = 0;
+uint64_t receivedBits = 0;
+
+void
+CalculateReceived(Ptr<const Packet> packet, const Address& address)
+{
+    packetReceived += packet->GetSize() / PACKET_SIZE;
+    receivedBits += packet->GetSize() * 8;
+    // NS_LOG_UNCOND("Received " << packet->GetSize() << " bytes from " << address);
+}
+
+void
+CalculateSent(Ptr<const Packet> packet)
+{
+    packetSent += packet->GetSize() / PACKET_SIZE;
+    // NS_LOG_UNCOND("Sent " << packet->GetSize() << " bytes");
+}
+
 int
 main(int argc, char* argv[])
 {
     uint64_t nNodes = 20;
     uint64_t nLeftNodeCount = nNodes / 2;
-    uint64_t nFlows = 50;
-    uint64_t nPackets = 500; // per second
-    uint64_t coverageArea = 5;
-    uint64_t port = 9;
+    uint64_t nFlows = 10;
+    uint64_t nPackets = 100; // per second
+    uint64_t coverageArea = 1;
+    uint64_t port = 8080;
 
-    LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
-    LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
+    // LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
+    // LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
 
     CommandLine cmd(__FILE__);
-    cmd.Parse(argc, argv);
     cmd.AddValue("nNodes", "Number of sender and receiver stations", nNodes);
     cmd.AddValue("nFlows", "Number of flows", nFlows);
-    cmd.AddValue("nPackets", "Number of packets to be sent per second", nPackets);
-    cmd.AddValue("coverageArea", "Set coverage area of the network", coverageArea);
+    cmd.AddValue("nPackets", "Number of packets sent per second", nPackets);
+    cmd.AddValue("coverageArea", "Coverage area multiplier of the network", coverageArea);
+    // cmd.AddValue("outputFile", "Output file name", outputFile);
+    cmd.Parse(argc, argv);
+
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(PACKET_SIZE));
 
     Time::SetResolution(Time::NS);
 
@@ -87,7 +112,7 @@ main(int argc, char* argv[])
     YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
     channel.AddPropagationLoss("ns3::RangePropagationLossModel",
                                "MaxRange",
-                               DoubleValue(coverageArea * 5));
+                               DoubleValue(coverageArea * TX_RANGE));
     YansWifiPhyHelper phyLeft;
     phyLeft.SetChannel(channel.Create());
 
@@ -193,8 +218,13 @@ main(int argc, char* argv[])
         senderHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
         senderHelper.SetAttribute("OffTime",
                                   StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-        senderHelper.SetAttribute("DataRate", DataRateValue(DataRate(nPackets * PACKET_SIZE)));
+        senderHelper.SetAttribute("DataRate", DataRateValue(DataRate(nPackets * PACKET_SIZE * 8)));
         senderApps.Add(senderHelper.Install(leftWifiStationNodes.Get(i % nLeftNodeCount)));
+
+        // Tracing
+        Ptr<OnOffApplication> onOff =
+            StaticCast<OnOffApplication>(senderApps.Get(i % nLeftNodeCount));
+        onOff->TraceConnectWithoutContext("Tx", MakeCallback(&CalculateSent));
     }
 
     // client
@@ -203,19 +233,41 @@ main(int argc, char* argv[])
         PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",
                                     (InetSocketAddress(Ipv4Address::GetAny(), port)));
         sinkApps.Add(sinkHelper.Install(rightWifiStationNodes.Get(i)));
+
+        // Tracing
+        Ptr<PacketSink> sink = StaticCast<PacketSink>(sinkApps.Get(i));
+        sink->TraceConnectWithoutContext("Rx", MakeCallback(&CalculateReceived));
     }
 
-    std::string animFile = "task-stat.xml";
-    AnimationInterface anim(animFile);
-    anim.EnablePacketMetadata();                                // Optional
-    anim.EnableIpv4L3ProtocolCounters(Seconds(0), Seconds(10)); // Optional
+    // std::string animFile = "task-stat.xml";
+    // AnimationInterface anim(animFile);
+    // anim.EnablePacketMetadata();                                // Optional
+    // anim.EnableIpv4L3ProtocolCounters(Seconds(0), Seconds(10)); // Optional
+    // anim.SetMaxPktsPerTraceFile(50000);
 
-    senderApps.Start(Seconds(3.0));
+    senderApps.Start(Seconds(1.0));
     sinkApps.Start(Seconds(0.0));
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     Simulator::Stop(Seconds(10.0));
     Simulator::Run();
     Simulator::Destroy();
+
+    double throughput = receivedBits / 10.0 / 1000.0 / 1000.0;
+    double deliveryRatio = packetReceived / packetSent;
+
+    std::string out1 = "what1.dat";
+    std::string out2 = "what2.dat";
+
+    std::ofstream outfile;
+    outfile.open(out1, std::ios_base::app);
+    outfile << " " << throughput << std::endl;
+    outfile.close();
+
+    outfile.open(out2, std::ios_base::app);
+    outfile << " " << deliveryRatio << std::endl;
+    outfile.close();
+    
+    NS_LOG_UNCOND(throughput << " " << deliveryRatio);
 
     return 0;
 }
