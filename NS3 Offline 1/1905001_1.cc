@@ -68,7 +68,7 @@ main(int argc, char* argv[])
     uint64_t nLeftNodeCount = nNodes / 2;
     uint64_t nFlows = 10;
     uint64_t nPackets = 100; // per second
-    uint64_t coverageArea = 1;
+    uint64_t coverageArea = 5;
     uint64_t port = 8080;
 
     // LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
@@ -82,24 +82,26 @@ main(int argc, char* argv[])
     // cmd.AddValue("outputFile", "Output file name", outputFile);
     cmd.Parse(argc, argv);
 
+    if (nFlows < nLeftNodeCount)
+        nFlows = nLeftNodeCount;
+
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(PACKET_SIZE));
 
     Time::SetResolution(Time::NS);
 
     NodeContainer p2pNodes;
-    NodeContainer leftWifiStationNodes;
-    NodeContainer rightWifiStationNodes;
-    NodeContainer leftWifiApNode;
-    NodeContainer rightWifiApNode;
-
     p2pNodes.Create(2);
 
     // left wifi
+    NodeContainer leftWifiStationNodes;
     leftWifiStationNodes.Create(nLeftNodeCount);
+    NodeContainer leftWifiApNode;
     leftWifiApNode = p2pNodes.Get(0);
 
     // right wifi
+    NodeContainer rightWifiStationNodes;
     rightWifiStationNodes.Create(nNodes - nLeftNodeCount);
+    NodeContainer rightWifiApNode;
     rightWifiApNode = p2pNodes.Get(1);
 
     PointToPointHelper pointToPoint;
@@ -239,7 +241,7 @@ main(int argc, char* argv[])
         sink->TraceConnectWithoutContext("Rx", MakeCallback(&CalculateReceived));
     }
 
-    // std::string animFile = "task-stat.xml";
+    // std::string animFile = "1905001_1.xml";
     // AnimationInterface anim(animFile);
     // anim.EnablePacketMetadata();                                // Optional
     // anim.EnableIpv4L3ProtocolCounters(Seconds(0), Seconds(10)); // Optional
@@ -266,7 +268,7 @@ main(int argc, char* argv[])
     outfile.open(out2, std::ios_base::app);
     outfile << " " << deliveryRatio << std::endl;
     outfile.close();
-    
+
     NS_LOG_UNCOND(throughput << " " << deliveryRatio);
 
     return 0;
