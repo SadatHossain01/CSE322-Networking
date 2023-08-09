@@ -25,9 +25,10 @@
 #include "ns3/yans-wifi-helper.h"
 
 #include <fstream>
+#include <string>
 
 #define PACKET_SIZE 1024 // in bytes
-#define TX_RANGE 5
+#define RANGE 5
 
 /*
 Network Topology
@@ -38,7 +39,7 @@ Network Topology
     s4 ------           --------r4
 */
 
-NS_LOG_COMPONENT_DEFINE("TaskStat");
+NS_LOG_COMPONENT_DEFINE("TaskMobile");
 
 using namespace ns3;
 
@@ -67,8 +68,8 @@ main(int argc, char* argv[])
     uint64_t nNodes = 20;
     uint64_t nFlows = 10;
     uint64_t nPackets = 100; // per second
-    uint64_t covergeAreaMultiplier = 5;
-    uint64_t port = 8080;
+    uint64_t speed = 15.0;   // in m/s
+    uint64_t port = 8082;
 
     // LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
     // LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
@@ -77,9 +78,7 @@ main(int argc, char* argv[])
     cmd.AddValue("nNodes", "Number of sender and receiver stations", nNodes);
     cmd.AddValue("nFlows", "Number of flows", nFlows);
     cmd.AddValue("nPackets", "Number of packets sent per second", nPackets);
-    cmd.AddValue("coverageAreaMultiplier",
-                 "Coverage area multiplier of the network",
-                 covergeAreaMultiplier);
+    cmd.AddValue("speed", "Speed of the mobile nodes", speed);
     cmd.Parse(argc, argv);
 
     uint64_t nLeftNodeCount = nNodes / 2;
@@ -115,9 +114,6 @@ main(int argc, char* argv[])
     p2pDevices = pointToPoint.Install(p2pNodes);
 
     YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
-    channel.AddPropagationLoss("ns3::RangePropagationLossModel",
-                               "MaxRange",
-                               DoubleValue(covergeAreaMultiplier * TX_RANGE));
     YansWifiPhyHelper phyLeft;
     phyLeft.SetChannel(channel.Create());
 
@@ -160,7 +156,7 @@ main(int argc, char* argv[])
         midYPosition = (nLeftNodeCount - 1) / 2.0;
     else
         midYPosition = nLeftNodeCount / 2.0;
-    double diffY = sqrt(TX_RANGE * covergeAreaMultiplier - 1) / midYPosition;
+    double diffY = sqrt(RANGE) / midYPosition;
     p2pNodes.Get(0)->GetObject<ConstantPositionMobilityModel>()->SetPosition(
         Vector(2.0, diffY * midYPosition, 0.0));
     mobility.SetPositionAllocator("ns3::GridPositionAllocator",
@@ -176,16 +172,20 @@ main(int argc, char* argv[])
                                   UintegerValue(1),
                                   "LayoutType",
                                   StringValue("RowFirst"));
+    mobility.SetMobilityModel(
+        "ns3::RandomWalk2dMobilityModel",
+        "Speed",
+        StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"),
+        "Bounds",
+        RectangleValue(Rectangle(-100, 100, -100, 100)));
     mobility.Install(leftWifiStationNodes);
-
-    NS_LOG_UNCOND("Left Wifi: diffY = " << diffY << ", midYPosition = " << midYPosition);
 
     // for right wifi
     if (nRightNodeCount % 2 == 0)
         midYPosition = (nRightNodeCount - 1) / 2.0;
     else
         midYPosition = nRightNodeCount / 2.0;
-    diffY = sqrt(TX_RANGE * covergeAreaMultiplier - 1) / midYPosition;
+    diffY = sqrt(RANGE - 1) / midYPosition;
     p2pNodes.Get(1)->GetObject<ConstantPositionMobilityModel>()->SetPosition(
         Vector(4.0, diffY * midYPosition, 0.0));
     mobility.SetPositionAllocator("ns3::GridPositionAllocator",
@@ -201,9 +201,13 @@ main(int argc, char* argv[])
                                   UintegerValue(1),
                                   "LayoutType",
                                   StringValue("RowFirst"));
+    mobility.SetMobilityModel(
+        "ns3::RandomWalk2dMobilityModel",
+        "Speed",
+        StringValue("ns3::ConstantRandomVariable[Constant=" + std::to_string(speed) + "]"),
+        "Bounds",
+        RectangleValue(Rectangle(-100, 100, -100, 100)));
     mobility.Install(rightWifiStationNodes);
-
-    NS_LOG_UNCOND("Right Wifi: diffY = " << diffY << ", midYPosition = " << midYPosition);
 
     InternetStackHelper stack;
     stack.Install(p2pNodes);
@@ -261,7 +265,7 @@ main(int argc, char* argv[])
         sink->TraceConnectWithoutContext("Rx", MakeCallback(&CalculateReceived));
     }
 
-    std::string animFile = "1905001_1.xml";
+    std::string animFile = "1905001_2.xml";
     AnimationInterface anim(animFile);
     anim.SetMaxPktsPerTraceFile(5000000);
 

@@ -4,17 +4,17 @@
 numNodes_array=(20 40 60 80 100)
 numFlows_array=(10 20 30 40 50)
 numPackets_array=(100 200 300 400 500)
-coverage_array=(1 2 4 5)
+speed_array=(5 10 15 20 25)
 
-file_name="1905001_1"
+file_name="1905001_2"
 
 cd ..
-rm -rf scratch/results/static
+rm -rf scratch/results/mobile
 rm -f what1.dat
 rm -f what2.dat
 
 # Create a directory to store the results
-mkdir -p scratch/results/static
+mkdir -p scratch/results/mobile
 
 plot() {
     local source_file="$1"
@@ -36,8 +36,8 @@ run_simulation() {
     local param_command="$2"
     shift 2
     local param_values=("$@")
-    local output_file1="scratch/results/static/${parameter}_Throughput.dat"
-    local output_file2="scratch/results/static/${parameter}_Ratio.dat"
+    local output_file1="scratch/results/mobile/${parameter}_Throughput.dat"
+    local output_file2="scratch/results/mobile/${parameter}_Ratio.dat"
 
     # Loop over the parameter values and run the simulation for each value
     local str1="./ns3 run ${file_name} --"
@@ -65,6 +65,6 @@ run_simulation() {
 run_simulation "Node" "nNodes" "${numNodes_array[@]}"
 run_simulation "Flow" "nFlows" "${numFlows_array[@]}"
 run_simulation "Packets Per Second" "nPackets" "${numPackets_array[@]}"
-run_simulation "Coverage Area" "coverageAreaMultiplier" "${coverage_array[@]}"
+run_simulation "Speed(m/s)" "speed" "${speed_array[@]}"
 
 cd scratch
