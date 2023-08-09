@@ -37,6 +37,7 @@ Network Topology
     s2 ------x --p2p-- y--------r2
     s3 ------           --------r3
     s4 ------           --------r4
+    All nodes except x and y are mobile nodes
 */
 
 NS_LOG_COMPONENT_DEFINE("TaskMobile");
@@ -68,7 +69,7 @@ main(int argc, char* argv[])
     uint64_t nNodes = 20;
     uint64_t nFlows = 10;
     uint64_t nPackets = 100; // per second
-    uint64_t speed = 15.0;   // in m/s
+    uint64_t speed = 5.0;   // in m/s
     uint64_t port = 8082;
 
     // LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
@@ -279,19 +280,14 @@ main(int argc, char* argv[])
     double throughput = receivedBits / 10.0 / 1000.0 / 1000.0;
     double deliveryRatio = packetReceived / packetSent;
 
-    std::string out1 = "what1.dat"; // throughput
-    std::string out2 = "what2.dat"; // delivery ratio
+    std::string out = "what.dat";
 
     std::ofstream outfile;
-    outfile.open(out1, std::ios_base::app);
-    outfile << " " << throughput << std::endl;
-    outfile.close();
-
-    outfile.open(out2, std::ios_base::app);
-    outfile << " " << deliveryRatio << std::endl;
+    outfile.open(out);
+    outfile << throughput << std::endl;
+    outfile << deliveryRatio << std::endl;
     outfile.close();
 
     NS_LOG_UNCOND(throughput << " " << deliveryRatio);
-
     return 0;
 }

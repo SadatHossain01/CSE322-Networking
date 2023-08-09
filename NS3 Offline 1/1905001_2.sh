@@ -7,15 +7,16 @@ numPackets_array=(100 200 300 400 500)
 speed_array=(5 10 15 20 25)
 
 file_name="1905001_2"
+temp_output_file="what.dat"
+type="mobile"
 
-cd ..
-rm -rf scratch/results/mobile
-rm -f what1.dat
-rm -f what2.dat
+# Define the output files
+Node_files=("scratch/results/${type}/Node_Throughput.dat" "scratch/results/${type}/Node_Ratio.dat")
+Flow_files=("scratch/results/${type}/Flow_Throughput.dat" "scratch/results/${type}/Flow_Ratio.dat")
+Packets_files=("scratch/results/${type}/Packets_Throughput.dat" "scratch/results/${type}/Packets_Ratio.dat")
+Speed_files=("scratch/results/${type}/Speed_Throughput.dat" "scratch/results/${type}/Speed_Ratio.dat")
 
-# Create a directory to store the results
-mkdir -p scratch/results/mobile
-
+# Function to plot the results using gnuplot
 plot() {
     local source_file="$1"
     local title="$2"
@@ -30,14 +31,17 @@ plot() {
 EOFMarker
 }
 
-# Function to run the simulation an d collect results for a specific parameter
+# Function to run the simulation and collect results for a specific parameter
 run_simulation() {
-    local parameter="$1"
-    local param_command="$2"
-    shift 2
+    local param_command="$1"
+    shift 1
+    local output_files=("$@")
+    shift 2 # size of output_files is 2
     local param_values=("$@")
-    local output_file1="scratch/results/mobile/${parameter}_Throughput.dat"
-    local output_file2="scratch/results/mobile/${parameter}_Ratio.dat"
+    local output_file1="${output_files[0]}"
+    local output_file2="${output_files[1]}"
+
+    # echo "$output_file1" "$output_file2"
 
     # Loop over the parameter values and run the simulation for each value
     local str1="./ns3 run ${file_name} --"
@@ -45,26 +49,52 @@ run_simulation() {
         str="$str1 --${param_command}=$value"
 
         # Run the simulation with the given parameters and save the output to the output file
-        echo -n $value >>what1.dat
-        echo -n $value >>what2.dat
         echo "$str"
         eval "$str"
+        # temp_output_file's first line is throughput, second line is delivery ratio
+        throughput=$(head -n 1 "$temp_output_file")
+        ratio=$(tail -n 1 "$temp_output_file")
+        # echo "Throughput: $res1" "Delivery Ratio: $res2"
+        echo "$value" "$throughput" >>"$output_file1"
+        echo "$value" "$ratio" >>"$output_file2"
+        >"$temp_output_file" # clear the temp file
     done
 
-    cp what1.dat "$output_file1"
-    cp what2.dat "$output_file2"
-    rm -f what1.dat
-    rm -f what2.dat
-    echo "Done running simulation for ${parameter}"
-
-    plot "$output_file1" "Throughput vs ${parameter}"
-    plot "$output_file2" "Ratio vs ${parameter}"
+    echo "Done running simulation for ${param_command}"
 }
 
-# Call the function with the parameter to vary
-run_simulation "Node" "nNodes" "${numNodes_array[@]}"
-run_simulation "Flow" "nFlows" "${numFlows_array[@]}"
-run_simulation "Packets Per Second" "nPackets" "${numPackets_array[@]}"
-run_simulation "Speed(m/s)" "speed" "${speed_array[@]}"
+cd ..
+rm -rf scratch/results/${type}
+rm -f "$temp_output_file"
+touch "$temp_output_file"
 
+# Create a directory to store the results
+mkdir -p scratch/results/${type}
+
+# Create the output files in advance to avoid GLOB mismatch error
+touch "${Node_files[@]}"
+touch "${Flow_files[@]}"
+touch "${Packets_files[@]}"
+touch "${Speed_files[@]}"
+
+# Simulation
+run_simulation "nNodes" "${Node_files[@]}" "${numNodes_array[@]}"
+run_simulation "nFlows" "${Flow_files[@]}" "${numFlows_array[@]}"
+run_simulation "nPackets" "${Packets_files[@]}" "${numPackets_array[@]}"
+run_simulation "speed" "${Speed_files[@]}" "${speed_array[@]}"
+
+# Plotting
+plot "${Node_files[0]}" "Throughput vs Node"
+plot "${Node_files[1]}" "Delivery Ratio vs Node"
+
+plot "${Flow_files[0]}" "Throughput vs Flow"
+plot "${Flow_files[1]}" "Delivery Ratio vs Flow"
+
+plot "${Packets_files[0]}" "Throughput vs Packets Per Second"
+plot "${Packets_files[1]}" "Delivery Ratio vs Packets Per Second"
+
+plot "${Speed_files[0]}" "Throughput vs Speed"
+plot "${Speed_files[1]}" "Delivery Ratio vs Speed"
+
+rm -f "$temp_output_file"
 cd scratch
