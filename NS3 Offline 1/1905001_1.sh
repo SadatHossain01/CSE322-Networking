@@ -7,7 +7,7 @@ numPackets_array=(100 200 300 400 500)
 coverage_array=(1 2 4 5)
 
 file_name="1905001_1"
-temp_output_file="what.dat"
+temp_output_file="what1.dat"
 type="static"
 
 # Define the output files

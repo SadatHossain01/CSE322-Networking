@@ -7,7 +7,7 @@ numPackets_array=(100 200 300 400 500)
 speed_array=(5 10 15 20 25)
 
 file_name="1905001_2"
-temp_output_file="what.dat"
+temp_output_file="what2.dat"
 type="mobile"
 
 # Define the output files

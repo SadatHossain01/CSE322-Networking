@@ -71,6 +71,7 @@ main(int argc, char* argv[])
     uint64_t nPackets = 100; // per second
     uint64_t speed = 5.0;   // in m/s
     uint64_t port = 8082;
+    double simulationTime = 10.0;
 
     // LogComponentEnable("OnOffApplication", LOG_LEVEL_INFO);
     // LogComponentEnable("PacketSink", LOG_LEVEL_INFO);
@@ -273,14 +274,14 @@ main(int argc, char* argv[])
     senderApps.Start(Seconds(1.0));
     sinkApps.Start(Seconds(0.0));
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
-    Simulator::Stop(Seconds(10.0));
+    Simulator::Stop(Seconds(simulationTime + 1));
     Simulator::Run();
     Simulator::Destroy();
 
-    double throughput = receivedBits / 10.0 / 1000.0 / 1000.0;
+    double throughput = receivedBits / 1000.0 / 1000.0 / simulationTime;
     double deliveryRatio = packetReceived / packetSent;
 
-    std::string out = "what.dat";
+    std::string out = "what2.dat";
 
     std::ofstream outfile;
     outfile.open(out);
