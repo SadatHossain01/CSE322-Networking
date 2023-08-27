@@ -169,30 +169,33 @@ TutorialApp::ScheduleTx()
     }
 }
 
-std::ofstream algo1CwndFile;
-std::ofstream algo2CwndFile;
+std::ofstream algo1;
+std::ofstream algo2;
 
 static void
 CwndChangeAlgo1(uint32_t oldCwnd, uint32_t newCwnd)
 {
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd << std::endl);
-    algo1CwndFile << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
-                  << newCwnd << std::endl;
+    // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd / 1024.0 << std::endl);
+    algo1 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
+          << newCwnd / 1024.0 << std::endl;
 }
 
 static void
 CwndChangeAlgo2(uint32_t oldCwnd, uint32_t newCwnd)
 {
-    NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd << std::endl);
-    algo2CwndFile << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
-                  << newCwnd << std::endl;
+    // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd / 1024.0 << std::endl);
+    algo2 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
+          << newCwnd / 1024.0 << std::endl;
 }
 
 int
 main(int argc, char* argv[])
 {
-    std::string algorithm1 = "ns3::TcpNewReno";
-    std::string algorithm2 = "ns3::TcpWestwoodPlus";
+    algo1.open("what1.dat", std::ios::app);
+    algo2.open("what2.dat", std::ios::app);
+
+    std::string algorithm1 = "TcpNewReno"; // it will always be this
+    std::string algorithm2 = "TcpAdaptiveReno";
     uint64_t payloadSize = 1024;
     const uint64_t nLeaf = 2;
     const std::string senderDataRate = "1Gbps";
@@ -200,25 +203,46 @@ main(int argc, char* argv[])
     double simulationTime = 10;         // seconds
     uint64_t bottleneckDataRate = 50;   // Mbps
     const uint64_t bottleneckDelay = 1; // ms
-    double packetLossRate = 0.000001;   // 1e-6
+    int packetLossExponent = 6;
     int basePort = 8080;
-    bool congestionDataCollection = true;
+    bool congestionDataEnabled = false;
 
-    if (congestionDataCollection)
+    std::string experimentName; // "loss" for packet loss rate, "data" for data rate
+
+    enum ExperimentType
     {
-        algo1CwndFile.open("Results/Cwnd_Time_" + algorithm1 + ".dat");
-        algo2CwndFile.open("Results/Cwnd_Time_" + algorithm2 + ".dat");
-    }
+        DATA_RATE,
+        PACKET_LOSS_RATE,
+        CONGESTION_WINDOW
+    };
+
+    ExperimentType experimentType;
 
     // Command Line Parameters
     CommandLine cmd(__FILE__);
     cmd.AddValue("bottleneckBW", "Bottleneck bandwidth in Mbps", bottleneckDataRate);
-    cmd.AddValue("packetLossExponent", "Packet Loss Rate Exponent", packetLossRate);
-    cmd.AddValue("congestionDataCollection",
-                 "Enable congestion data collection",
-                 congestionDataCollection);
+    cmd.AddValue("packetLossExponent", "Packet Loss Exponent", packetLossExponent);
+    cmd.AddValue("algorithm1", "Congestion Control Algorithm 1", algorithm1);
+    cmd.AddValue("algorithm2", "Congestion Control Algorithm 2", algorithm2);
+    cmd.AddValue("experimentName", "Experiment Name (loss or data or congestion)", experimentName);
     cmd.Parse(argc, argv);
+
     uint64_t nFlows = nLeaf;
+    double packetLossRate = 1.00 / pow(10.00, packetLossExponent);
+    if (experimentName == "loss")
+        experimentType = PACKET_LOSS_RATE;
+    else if (experimentName == "data")
+        experimentType = DATA_RATE;
+    else if (experimentName == "congestion")
+    {
+        experimentType = CONGESTION_WINDOW;
+        congestionDataEnabled = true;
+    }
+    else
+    {
+        std::cout << "Invalid experiment name. Exiting..." << std::endl;
+        return 0;
+    }
 
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
 
@@ -246,7 +270,7 @@ main(int argc, char* argv[])
         PointerValue(em)); // right router device is the receiver
 
     // Congestion Control Algorithm 1 : the upper flow (from top left to top right)
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue(algorithm1));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + algorithm1));
     InternetStackHelper stack1;
     for (uint32_t i = 0; i < dumbbell.LeftCount(); i += 2)
     {
@@ -259,7 +283,7 @@ main(int argc, char* argv[])
     stack1.Install(dumbbell.GetRight()); // right side bottleneck router
 
     // Congestion Control Algorithm 2 : the bottom flow (from bottom left to bottom right)
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue(algorithm2));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + algorithm2));
     InternetStackHelper stack2;
     for (uint32_t i = 1; i < dumbbell.LeftCount(); i += 2)
     {
@@ -299,7 +323,7 @@ main(int argc, char* argv[])
                    DataRate(senderDataRate));
         dumbbell.GetLeft(i)->AddApplication(app);
         senderApps.Add(app);
-        if (congestionDataCollection)
+        if (congestionDataEnabled)
         {
             if (i & 1) // the bottom flow
                 ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow",
@@ -321,60 +345,47 @@ main(int argc, char* argv[])
         DynamicCast<Ipv4FlowClassifier>(flowMonitor.GetClassifier());
     FlowMonitor::FlowStatsContainer stats = monitor->GetFlowStats();
 
-    algorithm1.erase(0, 6);
-    algorithm2.erase(0, 6);
-
     double throughput1 = 0, throughput2 = 0; // throughput1 for algorithm 1, across flow 1 and 3
                                              // throughput2 for algorithm 2, across flow 2 and 4
 
     for (auto it = stats.begin(); it != stats.end(); it++)
     {
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(it->first);
-        double throughput = it->second.rxBytes * 8.0 / simulationTime / 1024 / 1024;
+        double throughput = it->second.rxBytes * 8.0 / simulationTime / 1024;
         NS_LOG_UNCOND("Flow ID: " << it->first << " Source: " << t.sourceAddress
                                   << " Destination: " << t.destinationAddress);
-        NS_LOG_UNCOND("Throughput: " << throughput << " Mbps");
+        NS_LOG_UNCOND("Throughput: " << throughput << " kbps");
         if (it->first & 1)
             throughput1 += throughput;
         else
             throughput2 += throughput;
     }
 
-    if (!congestionDataCollection)
+    if (!congestionDataEnabled)
     {
-        std::ofstream algo1File1("Results/Throughput_DataRate_" + algorithm1 + ".dat",
-                                 std::ios::app);
-        std::ofstream algo1File2("Results/Throughput_LossRate_" + algorithm1 + ".dat",
-                                 std::ios::app);
-        std::ofstream algo2File1("Results/Throughput_DataRate_" + algorithm2 + ".dat",
-                                 std::ios::app);
-        std::ofstream algo2File2("Results/Throughput_LossRate_" + algorithm2 + ".dat",
-                                 std::ios::app);
-
         double finalThroughputAlgo1 = throughput1 / nFlows;
         double finalThroughputAlgo2 = throughput2 / nFlows;
 
-        algo1File1 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
-                   << finalThroughputAlgo1 << std::endl;
-        algo1File2 << std::fixed << std::setprecision(6) << packetLossRate << " "
-                   << finalThroughputAlgo1 << std::endl;
-        algo2File1 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
-                   << finalThroughputAlgo2 << std::endl;
-        algo2File2 << std::fixed << std::setprecision(6) << packetLossRate << " "
-                   << finalThroughputAlgo2 << std::endl;
-
-        algo1File1.close();
-        algo1File2.close();
-        algo2File1.close();
-        algo2File2.close();
-    }
-    else
-    {
-        algo1CwndFile.close();
-        algo2CwndFile.close();
+        if (experimentType == ExperimentType::DATA_RATE)
+        {
+            algo1 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
+                  << finalThroughputAlgo1 << std::endl;
+            algo2 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
+                  << finalThroughputAlgo2 << std::endl;
+        }
+        else if (experimentType == ExperimentType::PACKET_LOSS_RATE)
+        {
+            algo1 << std::fixed << std::setprecision(6) << packetLossExponent << " "
+                  << finalThroughputAlgo1 << std::endl;
+            algo2 << std::fixed << std::setprecision(6) << packetLossExponent << " "
+                  << finalThroughputAlgo2 << std::endl;
+        }
     }
 
     Simulator::Destroy();
+
+    algo1.close();
+    algo2.close();
 
     return 0;
 }
