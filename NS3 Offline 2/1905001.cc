@@ -228,7 +228,7 @@ main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     uint64_t nFlows = nLeaf;
-    double packetLossRate = 1.00 / pow(10.00, packetLossExponent);
+    double packetLossRate = pow(10.00, packetLossExponent); // given exponent is negative
     if (experimentName == "loss")
         experimentType = PACKET_LOSS_RATE;
     else if (experimentName == "data")

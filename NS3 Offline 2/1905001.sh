@@ -4,7 +4,7 @@ TempFile1="what1.dat"
 TempFile2="what2.dat"
 Algo1="TcpNewReno"
 DataRateValues=(1 50 100 150 200 250 300)
-PacketLossExponentValues=(2 3 4 5 6)
+PacketLossExponentValues=(-2 -3 -4 -5 -6)
 SourceFile="scratch/1905001.cc"
 
 OtherAlgos=("TcpAdaptiveReno" "TcpWestwoodPlus" "TcpHighSpeed")

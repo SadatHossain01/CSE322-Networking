@@ -130,8 +130,8 @@ class TcpAdaptiveReno : public TcpWestwoodPlus
   protected:
     void CongestionAvoidance(Ptr<TcpSocketState> tcb, uint32_t segmentsAcked) override;
 
-    Time m_congRtt;     //!< RTT's estimated value when a packet
-                        // is lost due to congestions
+    Time m_congRtt;     //!< RTT's estimated value
+                        // when jth packet loss occurs
     Time m_prevCongRtt; //!< Previous Congestion RTT (j-1th event)
     Time m_jthLossRtt;  // jth Packet Loss RTT
     Time m_minRtt;      //!< Minimum RTT
