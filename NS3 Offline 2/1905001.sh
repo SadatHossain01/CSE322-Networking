@@ -2,12 +2,17 @@
 
 TempFile1="what1.dat"
 TempFile2="what2.dat"
-Algo1="TcpNewReno"
-DataRateValues=(1 50 100 150 200 250 300)
+TempFile3="what3.dat"
+
+DataRateValues=(1 25 50 75 100 125 150 175 200 225 250 275 300)
 PacketLossExponentValues=(-2 -3 -4 -5 -6)
+
 SourceFile="scratch/1905001.cc"
 
+Algo1="TcpNewReno"
 OtherAlgos=("TcpAdaptiveReno" "TcpWestwoodPlus" "TcpHighSpeed")
+
+# Data Files
 PacketLossNewRenoFiles=(
     "scratch/results/data/TcpNewReno_AdaptiveReno_Loss_Throughput.dat"
     "scratch/results/data/TcpNewReno_WestwoodPlus_Loss_Throughput.dat"
@@ -29,15 +34,27 @@ DataRateOtherFiles=(
     "scratch/results/data/TcpHighSpeed_DataRate_Throughput.dat"
 )
 CongestionNewRenoFiles=(
-    "scratch/results/data/TcpNewReno_AdaptiveReno_CongestionWindow_Time.dat"
-    "scratch/results/data/TcpNewReno_WestwoodPlus_CongestionWindow_Time.dat"
-    "scratch/results/data/TcpNewReno_HighSpeed_CongestionWindow_Time.dat"
+    "scratch/results/data/TcpNewReno_AdaptiveReno_Time_CongestionWindow.dat"
+    "scratch/results/data/TcpNewReno_WestwoodPlus_Time_CongestionWindow.dat"
+    "scratch/results/data/TcpNewReno_HighSpeed_Time_CongestionWindow.dat"
 )
 CongestionOtherFiles=(
     "scratch/results/data/TcpAdaptiveReno_Time_CongestionWindow.dat"
     "scratch/results/data/TcpWestwoodPlus_Time_CongestionWindow.dat"
     "scratch/results/data/TcpHighSpeed_Time_CongestionWindow.dat"
 )
+JainLossFiles=(
+    "scratch/results/data/TcpNewReno_AdaptiveReno_Loss_JainIndex.dat"
+    "scratch/results/data/TcpNewReno_WestwoodPlus_Loss_JainIndex.dat"
+    "scratch/results/data/TcpNewReno_HighSpeed_Loss_JainIndex.dat"
+)
+JainDataFiles=(
+    "scratch/results/data/TcpNewReno_AdaptiveReno_DataRate_JainIndex.dat"
+    "scratch/results/data/TcpNewReno_WestwoodPlus_DataRate_JainIndex.dat"
+    "scratch/results/data/TcpNewReno_HighSpeed_DataRate_JainIndex.dat"
+)
+
+# Plot Files
 DataRatePlotFiles=(
     "scratch/results/plots/TcpNewReno_AdaptiveReno_DataRate_Throughput.png"
     "scratch/results/plots/TcpNewReno_WestwoodPlus_DataRate_Throughput.png"
@@ -53,6 +70,16 @@ CongestionPlotFiles=(
     "scratch/results/plots/TcpNewReno_WestwoodPlus_Time_CongestionWindow.png"
     "scratch/results/plots/TcpNewReno_HighSpeed_Time_CongestionWindow.png"
 )
+JainLossPlotFiles=(
+    "scratch/results/plots/TcpNewReno_AdaptiveReno_Loss_JainIndex.png"
+    "scratch/results/plots/TcpNewReno_WestwoodPlus_Loss_JainIndex.png"
+    "scratch/results/plots/TcpNewReno_HighSpeed_Loss_JainIndex.png"
+)
+JainDataPlotFiles=(
+    "scratch/results/plots/TcpNewReno_AdaptiveReno_DataRate_JainIndex.png"
+    "scratch/results/plots/TcpNewReno_WestwoodPlus_DataRate_JainIndex.png"
+    "scratch/results/plots/TcpNewReno_HighSpeed_DataRate_JainIndex.png"
+)
 
 runSimulation() {
     local paramToVary="$1"
@@ -61,7 +88,8 @@ runSimulation() {
     local algo2="$4"
     local outFile1="$5"
     local outFile2="$6"
-    shift 6
+    local outFile3="$7" # used for Jain's Fairness Index
+    shift 7
     local paramValues=("$@")
 
     for value in "${paramValues[@]}"; do
@@ -73,10 +101,12 @@ runSimulation() {
     # Copy the contents of the temporary output files to the actual output files
     cat "$TempFile1" >"$outFile1"
     cat "$TempFile2" >"$outFile2"
+    cat "$TempFile3" >"$outFile3" # used for Jain's Fairness Index
 
     # Clear the temporary output files
     >"$TempFile1"
     >"$TempFile2"
+    >"$TempFile3"
 }
 
 runSimulationForCongestionWindow() {
@@ -99,7 +129,7 @@ runSimulationForCongestionWindow() {
     >"$TempFile2"
 }
 
-plot() {
+plotDoubleFile() {
     local file1="$1"
     local file2="$2"
     local algo1="$3"
@@ -115,8 +145,26 @@ plot() {
         set ylabel "$y_title"
         set grid
         set output "$output_file"
-        plot "$file1" using 1:2 title "$algo1" with linespoints lc "blue", \
-             "$file2" using 1:2 title "$algo2" with linespoints lc "red"
+        plot "$file1" using 1:2 title "$algo1" with lines lc "blue", \
+             "$file2" using 1:2 title "$algo2" with lines lc "red"
+EOFMarker
+}
+
+plotSingleFile() {
+    local file="$1"
+    local x_title="$2"
+    local y_title="$3"
+    local title="$4"
+    local output_file="$5"
+
+    gnuplot -persist <<-EOFMarker
+        set datafile separator " "
+        set terminal png size 640,480
+        set xlabel "$x_title"
+        set ylabel "$y_title"
+        set grid
+        set output "$output_file"
+        plot "$file" using 1:2 title "$title" with lines
 EOFMarker
 }
 
@@ -124,12 +172,15 @@ cd ..
 rm -rf scratch/results
 rm -f "$TempFile1"
 rm -f "$TempFile2"
+rm -f "$TempFile3"
 mkdir -p scratch/results/data
 mkdir -p scratch/results/plots
 
 # Create the .dat files first so that GLOB mismatch does not happen
 touch "$TempFile1"
 touch "$TempFile2"
+touch "$TempFile3"
+
 for file in "${PacketLossNewRenoFiles[@]}"; do
     touch "$file"
 done
@@ -148,37 +199,54 @@ done
 for file in "${CongestionOtherFiles[@]}"; do
     touch "$file"
 done
-
-# Data Rate Experiment
-for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
-    runSimulation "bottleneckBW" "data" "$Algo1" "${OtherAlgos[$i]}" "${DataRateNewRenoFiles[$i]}" "${DataRateOtherFiles[$i]}" "${DataRateValues[@]}"
+for file in "${JainLossFiles[@]}"; do
+    touch "$file"
+done
+for file in "${JainDataFiles[@]}"; do
+    touch "$file"
 done
 
-# Packet Loss Experiment
+# Throughput (and Jane's Index) vs Bottleneck Link Capacity
 for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
-    runSimulation "packetLossExponent" "loss" "$Algo1" "${OtherAlgos[$i]}" "${PacketLossNewRenoFiles[$i]}" "${PacketLossOtherFiles[$i]}" "${PacketLossExponentValues[@]}"
+    runSimulation "bottleneckBW" "data" "$Algo1" "${OtherAlgos[$i]}" "${DataRateNewRenoFiles[$i]}" "${DataRateOtherFiles[$i]}" "${JainDataFiles[$i]}" "${DataRateValues[@]}"
 done
 
-# Congestion Window Experiment
+# Throughput (and Jane's Index) vs Packet Loss Exponent
+for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
+    runSimulation "packetLossExponent" "loss" "$Algo1" "${OtherAlgos[$i]}" "${PacketLossNewRenoFiles[$i]}" "${PacketLossOtherFiles[$i]}" "${JainLossFiles[$i]}" "${PacketLossExponentValues[@]}"
+done
+
+# Congestion Window vs Time
 for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
     runSimulationForCongestionWindow "$Algo1" "${OtherAlgos[$i]}" "${CongestionNewRenoFiles[$i]}" "${CongestionOtherFiles[$i]}"
 done
 
-# Data Rate Plot
+# Throughput vs Bottleneck Link Capacity Plot
 for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
-    plot "${DataRateNewRenoFiles[$i]}" "${DataRateOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Bottleneck Link Capacity (Mbps)" "Throughput (kbps)" "${DataRatePlotFiles[$i]}"
+    plotDoubleFile "${DataRateNewRenoFiles[$i]}" "${DataRateOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Bottleneck Link Capacity (Mbps)" "Throughput (kbps)" "${DataRatePlotFiles[$i]}"
 done
 
-# Packet Loss Plot
+# Throughput vs Packet Loss Exponent Plot
 for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
-    plot "${PacketLossNewRenoFiles[$i]}" "${PacketLossOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Packet Loss Exponent" "Throughput (kbps)" "${PacketLossPlotFiles[$i]}"
+    plotDoubleFile "${PacketLossNewRenoFiles[$i]}" "${PacketLossOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Packet Loss Exponent" "Throughput (kbps)" "${PacketLossPlotFiles[$i]}"
 done
 
-# Congestion Window Plot
+# Congestion Window vs Time Plot
 for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
-    plot "${CongestionNewRenoFiles[$i]}" "${CongestionOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Time (seconds)" "Congestion Window Size (kB)" "${CongestionPlotFiles[$i]}"
+    plotDoubleFile "${CongestionNewRenoFiles[$i]}" "${CongestionOtherFiles[$i]}" "$Algo1" "${OtherAlgos[$i]}" "Time (seconds)" "Congestion Window Size (kB)" "${CongestionPlotFiles[$i]}"
+done
+
+# Jain's Fairness Index vs Packet Loss Exponent Plot
+for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
+    plotSingleFile "${JainLossFiles[$i]}" "Packet Loss Exponent" "Jain's Fairness Index" "$Algo1-${OtherAlgos[$i]}" "${JainLossPlotFiles[$i]}"
+done
+
+# Jain's Fairness Index vs Bottleneck Link Capacity Plot
+for ((i = 0; i < ${#OtherAlgos[@]}; ++i)); do
+    plotSingleFile "${JainDataFiles[$i]}" "Bottleneck Link Capacity (Mbps)" "Jain's Fairness Index" "$Algo1-${OtherAlgos[$i]}" "${JainDataPlotFiles[$i]}"
 done
 
 rm -f "$TempFile1"
 rm -f "$TempFile2"
+rm -f "$TempFile3"
 cd scratch

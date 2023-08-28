@@ -53,13 +53,11 @@ class TutorialApp : public Application
      * \param socket The socket.
      * \param address The destination address.
      * \param packetSize The packet size to transmit.
-     * \param simultime The simulation time in seconds.
      * \param dataRate the data rate to use.
      */
     void Setup(Ptr<Socket> socket,
                Address address,
                uint32_t packetSize,
-               uint32_t simultime,
                DataRate dataRate);
 
   private:
@@ -74,7 +72,6 @@ class TutorialApp : public Application
     Ptr<Socket> m_socket;   //!< The transmission socket.
     Address m_peer;         //!< The destination address.
     uint32_t m_packetSize;  //!< The packet size.
-    uint32_t m_simultime;   //!< The simulation time.
     DataRate m_dataRate;    //!< The data rate to use.
     EventId m_sendEvent;    //!< Send event.
     bool m_running;         //!< True if the application is running.
@@ -85,7 +82,6 @@ TutorialApp::TutorialApp()
     : m_socket(nullptr),
       m_peer(),
       m_packetSize(0),
-      m_simultime(0),
       m_dataRate(0),
       m_sendEvent(),
       m_running(false),
@@ -113,13 +109,11 @@ void
 TutorialApp::Setup(Ptr<Socket> socket,
                    Address address,
                    uint32_t packetSize,
-                   uint32_t simultime,
                    DataRate dataRate)
 {
     m_socket = socket;
     m_peer = address;
     m_packetSize = packetSize;
-    m_simultime = simultime;
     m_dataRate = dataRate;
 }
 
@@ -155,8 +149,8 @@ TutorialApp::SendPacket()
     Ptr<Packet> packet = Create<Packet>(m_packetSize);
     m_socket->Send(packet);
 
-    if (Simulator::Now().GetSeconds() < m_simultime)
-        ScheduleTx();
+    m_packetsSent++;
+    ScheduleTx();
 }
 
 void
@@ -169,41 +163,40 @@ TutorialApp::ScheduleTx()
     }
 }
 
-std::ofstream algo1;
-std::ofstream algo2;
+std::ofstream out1, out2, out3;
 
 static void
 CwndChangeAlgo1(uint32_t oldCwnd, uint32_t newCwnd)
 {
     // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd / 1024.0 << std::endl);
-    algo1 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
-          << newCwnd / 1024.0 << std::endl;
+    out1 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
+         << newCwnd / 1024.0 << std::endl;
 }
 
 static void
 CwndChangeAlgo2(uint32_t oldCwnd, uint32_t newCwnd)
 {
     // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " " << newCwnd / 1024.0 << std::endl);
-    algo2 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
-          << newCwnd / 1024.0 << std::endl;
+    out2 << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds() << " "
+         << newCwnd / 1024.0 << std::endl;
 }
 
 int
 main(int argc, char* argv[])
 {
-    algo1.open("what1.dat", std::ios::app);
-    algo2.open("what2.dat", std::ios::app);
+    out1.open("what1.dat", std::ios::app); // Algorithm 1 Throughput or Congestion Window
+    out2.open("what2.dat", std::ios::app); // Algorithm 2 Throughput
+    out3.open("what3.dat", std::ios::app); // Jain's Fairness Index
 
     std::string algorithm1 = "TcpNewReno"; // it will always be this
     std::string algorithm2 = "TcpAdaptiveReno";
     uint64_t payloadSize = 1024;
-    const uint64_t nLeaf = 2;
     const std::string senderDataRate = "1Gbps";
     const std::string senderDelay = "1ms";
     double simulationTime = 10;         // seconds
     uint64_t bottleneckDataRate = 50;   // Mbps
-    const uint64_t bottleneckDelay = 1; // ms
-    int packetLossExponent = 6;
+    const uint64_t bottleneckDelay = 100; // ms
+    int packetLossExponent = -6;
     int basePort = 8080;
     bool congestionDataEnabled = false;
 
@@ -211,9 +204,9 @@ main(int argc, char* argv[])
 
     enum ExperimentType
     {
-        DATA_RATE,
-        PACKET_LOSS_RATE,
-        CONGESTION_WINDOW
+        LOSS_EXPONENT, // for both throughput and Jain's Fairness Index
+        DATA_RATE,     // for both throughput and Jain's Fairness Index
+        CONGESTION_TIME,
     };
 
     ExperimentType experimentType;
@@ -224,18 +217,17 @@ main(int argc, char* argv[])
     cmd.AddValue("packetLossExponent", "Packet Loss Exponent", packetLossExponent);
     cmd.AddValue("algorithm1", "Congestion Control Algorithm 1", algorithm1);
     cmd.AddValue("algorithm2", "Congestion Control Algorithm 2", algorithm2);
-    cmd.AddValue("experimentName", "Experiment Name (loss or data or congestion)", experimentName);
+    cmd.AddValue("experimentName", "Experiment Name (loss/data/congestion)", experimentName);
     cmd.Parse(argc, argv);
 
-    uint64_t nFlows = nLeaf;
     double packetLossRate = pow(10.00, packetLossExponent); // given exponent is negative
     if (experimentName == "loss")
-        experimentType = PACKET_LOSS_RATE;
+        experimentType = LOSS_EXPONENT;
     else if (experimentName == "data")
         experimentType = DATA_RATE;
     else if (experimentName == "congestion")
     {
-        experimentType = CONGESTION_WINDOW;
+        experimentType = CONGESTION_TIME;
         congestionDataEnabled = true;
     }
     else
@@ -262,7 +254,7 @@ main(int argc, char* argv[])
                  StringValue(std::to_string(bottleneckDataRate * bottleneckDelay) + "p"));
 
     // The Dumbbell Topology
-    PointToPointDumbbellHelper dumbbell(nLeaf, p2p, nLeaf, p2p, bottleNeckLink);
+    PointToPointDumbbellHelper dumbbell(2, p2p, 2, p2p, bottleNeckLink);
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(packetLossRate));
     dumbbell.m_routerDevices.Get(1)->SetAttribute(
@@ -272,11 +264,8 @@ main(int argc, char* argv[])
     // Congestion Control Algorithm 1 : the upper flow (from top left to top right)
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + algorithm1));
     InternetStackHelper stack1;
-    for (uint32_t i = 0; i < dumbbell.LeftCount(); i += 2)
-    {
-        stack1.Install(dumbbell.GetLeft(i));  // ith left side leaf node
-        stack1.Install(dumbbell.GetRight(i)); // ith right side leaf node
-    }
+    stack1.Install(dumbbell.GetLeft(0));  // left side leaf node
+    stack1.Install(dumbbell.GetRight(0)); // right side leaf node
 
     // Setting Algorithm 1 (TcpNewReno) to the bottleneck routers
     stack1.Install(dumbbell.GetLeft());  // left side bottleneck router
@@ -285,16 +274,14 @@ main(int argc, char* argv[])
     // Congestion Control Algorithm 2 : the bottom flow (from bottom left to bottom right)
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + algorithm2));
     InternetStackHelper stack2;
-    for (uint32_t i = 1; i < dumbbell.LeftCount(); i += 2)
-    {
-        stack2.Install(dumbbell.GetLeft(i));  // ith left side leaf node
-        stack2.Install(dumbbell.GetRight(i)); // ith right side leaf node
-    }
+    stack2.Install(dumbbell.GetLeft(1));  // left side leaf node
+    stack2.Install(dumbbell.GetRight(1)); // right side leaf node
 
     // IP Address Assignment
-    Ipv4AddressHelper left("10.1.1.0", "255.255.255.0");   // left network
-    Ipv4AddressHelper right("10.2.1.0", "255.255.255.0");  // right network
-    Ipv4AddressHelper center("10.3.1.0", "255.255.255.0"); // center network
+    Ipv4AddressHelper left, right, center;
+    left.SetBase("10.1.1.0", "255.255.255.0");   // left network
+    right.SetBase("10.2.1.0", "255.255.255.0");  // right network
+    center.SetBase("10.3.1.0", "255.255.255.0"); // center network
     dumbbell.AssignIpv4Addresses(left, right, center);
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
@@ -305,33 +292,41 @@ main(int argc, char* argv[])
     Ptr<FlowMonitor> monitor = flowMonitor.InstallAll();
 
     ApplicationContainer sinkApps, senderApps;
-    for (uint64_t i = 0; i < nFlows; i++)
-    {
-        // Receiver apps
-        PacketSinkHelper sink("ns3::TcpSocketFactory",
-                              InetSocketAddress(Ipv4Address::GetAny(), basePort + i));
-        sinkApps.Add(sink.Install(dumbbell.GetRight(i % dumbbell.RightCount())));
 
-        // Sender apps
-        Ptr<Socket> ns3TcpSocket =
-            Socket::CreateSocket(dumbbell.GetLeft(i), TcpSocketFactory::GetTypeId());
-        Ptr<TutorialApp> app = CreateObject<TutorialApp>();
-        app->Setup(ns3TcpSocket,
-                   InetSocketAddress(dumbbell.GetRightIpv4Address(i), basePort + i),
-                   payloadSize,
-                   simulationTime,
-                   DataRate(senderDataRate));
-        dumbbell.GetLeft(i)->AddApplication(app);
-        senderApps.Add(app);
-        if (congestionDataEnabled)
-        {
-            if (i & 1) // the bottom flow
-                ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow",
-                                                         MakeCallback(&CwndChangeAlgo2));
-            else // the upper flow
-                ns3TcpSocket->TraceConnectWithoutContext("CongestionWindow",
-                                                         MakeCallback(&CwndChangeAlgo1));
-        }
+    // Receiver Apps
+    PacketSinkHelper sink1("ns3::TcpSocketFactory",
+                           InetSocketAddress(Ipv4Address::GetAny(), basePort));
+    PacketSinkHelper sink2("ns3::TcpSocketFactory",
+                           InetSocketAddress(Ipv4Address::GetAny(), basePort + 1));
+    sinkApps.Add(sink1.Install(dumbbell.GetRight(0)));
+    sinkApps.Add(sink2.Install(dumbbell.GetRight(1)));
+
+    // Sender Apps
+    Ptr<Socket> ns3TcpSocket1 =
+        Socket::CreateSocket(dumbbell.GetLeft(0), TcpSocketFactory::GetTypeId());
+    Ptr<TutorialApp> app1 = CreateObject<TutorialApp>();
+    app1->Setup(ns3TcpSocket1,
+                InetSocketAddress(dumbbell.GetRightIpv4Address(0), basePort),
+                payloadSize,
+                DataRate(senderDataRate));
+    Ptr<Socket> ns3TcpSocket2 =
+        Socket::CreateSocket(dumbbell.GetLeft(1), TcpSocketFactory::GetTypeId());
+    Ptr<TutorialApp> app2 = CreateObject<TutorialApp>();
+    app2->Setup(ns3TcpSocket2,
+                InetSocketAddress(dumbbell.GetRightIpv4Address(1), basePort + 1),
+                payloadSize,
+                DataRate(senderDataRate));
+    dumbbell.GetLeft(0)->AddApplication(app1);
+    dumbbell.GetLeft(1)->AddApplication(app2);
+    senderApps.Add(app1);
+    senderApps.Add(app2);
+
+    if (congestionDataEnabled)
+    {
+        ns3TcpSocket1->TraceConnectWithoutContext("CongestionWindow",
+                                                  MakeCallback(&CwndChangeAlgo1));
+        ns3TcpSocket2->TraceConnectWithoutContext("CongestionWindow",
+                                                  MakeCallback(&CwndChangeAlgo2));
     }
 
     sinkApps.Start(Seconds(0.0));
@@ -345,47 +340,63 @@ main(int argc, char* argv[])
         DynamicCast<Ipv4FlowClassifier>(flowMonitor.GetClassifier());
     FlowMonitor::FlowStatsContainer stats = monitor->GetFlowStats();
 
-    double throughput1 = 0, throughput2 = 0; // throughput1 for algorithm 1, across flow 1 and 3
-                                             // throughput2 for algorithm 2, across flow 2 and 4
-
+    std::vector<double> throughputs;
     for (auto it = stats.begin(); it != stats.end(); it++)
     {
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(it->first);
-        double throughput = it->second.rxBytes * 8.0 / simulationTime / 1024;
+        double throughput = (it->second.rxBytes * 8.0) / (simulationTime * 1024);
         NS_LOG_UNCOND("Flow ID: " << it->first << " Source: " << t.sourceAddress
                                   << " Destination: " << t.destinationAddress);
         NS_LOG_UNCOND("Throughput: " << throughput << " kbps");
-        if (it->first & 1)
-            throughput1 += throughput;
-        else
-            throughput2 += throughput;
+        throughputs.push_back(throughput);
     }
 
     if (!congestionDataEnabled)
     {
-        double finalThroughputAlgo1 = throughput1 / nFlows;
-        double finalThroughputAlgo2 = throughput2 / nFlows;
+        double finalThroughputAlgo1 = 0;       // The upper flow
+        double finalThroughputAlgo2 = 0;       // The bottom flow
+        double numerator = 0, denominator = 0; // Jain's Fairness Index
+
+        for (uint32_t i = 0; i < throughputs.size(); i++)
+        {
+            if (i & 1)
+                finalThroughputAlgo2 += throughputs[i];
+            else
+                finalThroughputAlgo1 += throughputs[i];
+
+            numerator += throughputs[i];
+            denominator += throughputs[i] * throughputs[i];
+        }
+
+        double JainIndex = (numerator * numerator) / (throughputs.size() * denominator);
+
+        NS_LOG_UNCOND("Jain's Fairness Index: " << JainIndex);
 
         if (experimentType == ExperimentType::DATA_RATE)
         {
-            algo1 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
-                  << finalThroughputAlgo1 << std::endl;
-            algo2 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
-                  << finalThroughputAlgo2 << std::endl;
+            out1 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
+                 << finalThroughputAlgo1 << std::endl;
+            out2 << std::fixed << std::setprecision(6) << bottleneckDataRate << " "
+                 << finalThroughputAlgo2 << std::endl;
+            out3 << std::fixed << std::setprecision(6) << bottleneckDataRate << " " << JainIndex
+                 << std::endl;
         }
-        else if (experimentType == ExperimentType::PACKET_LOSS_RATE)
+        else if (experimentType == ExperimentType::LOSS_EXPONENT)
         {
-            algo1 << std::fixed << std::setprecision(6) << packetLossExponent << " "
-                  << finalThroughputAlgo1 << std::endl;
-            algo2 << std::fixed << std::setprecision(6) << packetLossExponent << " "
-                  << finalThroughputAlgo2 << std::endl;
+            out1 << std::fixed << std::setprecision(6) << packetLossExponent << " "
+                 << finalThroughputAlgo1 << std::endl;
+            out2 << std::fixed << std::setprecision(6) << packetLossExponent << " "
+                 << finalThroughputAlgo2 << std::endl;
+            out3 << std::fixed << std::setprecision(6) << packetLossExponent << " " << JainIndex
+                 << std::endl;
         }
     }
 
     Simulator::Destroy();
 
-    algo1.close();
-    algo2.close();
+    out1.close();
+    out2.close();
+    out3.close();
 
     return 0;
 }

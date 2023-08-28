@@ -106,7 +106,6 @@ TcpAdaptiveReno::PktsAcked(Ptr<TcpSocketState> tcb, uint32_t packetsAcked, const
         m_minRtt = rtt;
     m_currentRtt = rtt;
 
-    m_ackedSegments += packetsAcked;
     TcpWestwoodPlus::EstimateBW(rtt, tcb);
 }
 
@@ -116,9 +115,15 @@ double
 TcpAdaptiveReno::EstimateCongestionLevel()
 {
     NS_LOG_FUNCTION(this);
-    double a = 0.85; // Exponential Soothing Factor
 
-    double congRtt = a * m_prevCongRtt.GetSeconds() + (1 - a) * m_congRtt.GetSeconds();
+    double a; // Exponential Soothing Factor
+
+    if (m_prevCongRtt.IsZero())
+        a = 0; // Initially take the current loss fully
+    else
+        a = 0.85;
+
+    double congRtt = a * m_prevCongRtt.GetSeconds() + (1 - a) * m_jthLossRtt.GetSeconds();
     m_congRtt = Seconds(congRtt);
 
     // Congestion Level
@@ -129,20 +134,20 @@ TcpAdaptiveReno::EstimateCongestionLevel()
 }
 
 // Estimates the increase in window size.
-// Calculate maximum windows increase and update the value of m_incWnd.
+// Calculates maximum windows increase and update the value of m_incWnd.
 void
 TcpAdaptiveReno::EstimateIncWnd(Ptr<TcpSocketState> tcb)
 {
     NS_LOG_FUNCTION(this << tcb);
 
     double c = EstimateCongestionLevel(); // Congestion Level
-    int m_scalingFactor = 1000; // Paper page 2 says, M is a scaling factor we set at 10Mbps based
-                                // on our Internet measurements so far.
+    int scalingFactor = 1000; // Paper page 2 says, M is a scaling factor we set at 10Mbps based
+                              // on our Internet measurements so far.
     // Current Bandwidth has been calculated in TcpWestWoodPlus’s
     // EstimateBW() function which is called in PktsAcked()
     double maxSegmentSize = tcb->m_segmentSize * tcb->m_segmentSize;
 
-    double m_maxIncWnd = m_currentBW.Get().GetBitRate() / m_scalingFactor * maxSegmentSize;
+    double m_maxIncWnd = m_currentBW.Get().GetBitRate() / scalingFactor * maxSegmentSize;
 
     double alpha = 10;
     double beta = 2 * m_maxIncWnd * (1 / alpha - (1 / alpha + 1) / std::exp(alpha));
