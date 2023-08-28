@@ -55,10 +55,7 @@ class TutorialApp : public Application
      * \param packetSize The packet size to transmit.
      * \param dataRate the data rate to use.
      */
-    void Setup(Ptr<Socket> socket,
-               Address address,
-               uint32_t packetSize,
-               DataRate dataRate);
+    void Setup(Ptr<Socket> socket, Address address, uint32_t packetSize, DataRate dataRate);
 
   private:
     void StartApplication() override;
@@ -106,10 +103,7 @@ TutorialApp::GetTypeId()
 }
 
 void
-TutorialApp::Setup(Ptr<Socket> socket,
-                   Address address,
-                   uint32_t packetSize,
-                   DataRate dataRate)
+TutorialApp::Setup(Ptr<Socket> socket, Address address, uint32_t packetSize, DataRate dataRate)
 {
     m_socket = socket;
     m_peer = address;
@@ -193,8 +187,8 @@ main(int argc, char* argv[])
     uint64_t payloadSize = 1024;
     const std::string senderDataRate = "1Gbps";
     const std::string senderDelay = "1ms";
-    double simulationTime = 10;         // seconds
-    uint64_t bottleneckDataRate = 50;   // Mbps
+    double simulationTime = 10;           // seconds
+    uint64_t bottleneckDataRate = 50;     // Mbps
     const uint64_t bottleneckDelay = 100; // ms
     int packetLossExponent = -6;
     int basePort = 8080;
