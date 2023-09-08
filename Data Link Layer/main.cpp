@@ -207,7 +207,7 @@ int main()
     // Received frame
     std::string received_frame = sent_frame;
     // toggle each bit with probability p
-    std::vector<boolean> toggled(received_frame.size(), false);
+    std::vector<bool> toggled(received_frame.size(), false);
     std::cout << "received frame: " << std::endl;
     for (int i = 0; i < received_frame.size(); i++)
     {
