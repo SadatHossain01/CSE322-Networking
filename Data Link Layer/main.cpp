@@ -15,8 +15,62 @@ std::string data_string, gen_polynomial;
 #define RED_COLOR_CODE 4
 #define WHITE_COLOR_CODE 7
 
-std::string divide(std::string dividend, std::string divisor)
+void trim(std::string &s)
 {
+    // trim initial zeroes
+    int idx = 0;
+    while (idx < s.size() && s[idx] == '0')
+        idx++;
+    s = s.substr(idx, s.size() - idx);
+}
+
+// returns {quotient, remainder}
+std::pair<std::string, std::string> divide(std::string dividend, std::string divisor)
+{
+    trim(dividend);
+    trim(divisor);
+
+    // std::cerr << "After trimming: " << dividend << " " << divisor << std::endl;
+
+    if (dividend.size() < divisor.size())
+        return {"0", dividend};
+
+    std::string quotient = "";
+    std::string cur_dividend = dividend.substr(0, divisor.size() - 1);
+    int dividend_next_idx = divisor.size() - 1;
+
+    while (dividend_next_idx < dividend.size())
+    {
+        cur_dividend += dividend[dividend_next_idx++];
+        assert(divisor.size() == cur_dividend.size());
+
+        std::string subtrahend; // divisor or 0
+        if (cur_dividend.front() == '0')
+        {
+            quotient += '0';
+            subtrahend = std::string(divisor.size(), '0');
+        }
+        else
+        {
+            quotient += '1';
+            subtrahend = divisor;
+        }
+        // std::cerr << "cur_dividend: " << cur_dividend << " subtrahend: " << subtrahend << std::endl;
+
+        assert(subtrahend.size() == cur_dividend.size());
+        for (int i = 0; i < cur_dividend.size(); i++)
+            if (cur_dividend[i] == subtrahend[i])
+                cur_dividend[i] = '0';
+            else
+                cur_dividend[i] = '1';
+        // drop the MSB from cur_dividend
+        cur_dividend = cur_dividend.substr(1, cur_dividend.size() - 1);
+    }
+
+    trim(quotient);
+    trim(cur_dividend);
+
+    return {quotient, cur_dividend};
 }
 
 int main()
@@ -75,11 +129,11 @@ int main()
         std::cout << total_string.substr(8 * i * m, 8 * m) << std::endl;
     std::cout << std::endl;
 
-    std::vector<std::vector<short>> data_block(n_rows);
+    std::vector<std::string> data_block(n_rows);
     int total_string_idx = 0;
     for (int i = 0; i < n_rows; i++)
     {
-        data_block[i].resize(8 * m + n_check_bits + 1, 0); // +1 to make it 1-indexed
+        data_block[i].resize(8 * m + n_check_bits + 1, '0'); // +1 to make it 1-indexed
         int next_idx = 1;
         for (int j = total_string_idx; j < total_string_idx + 8 * m; j++)
         {
@@ -88,7 +142,7 @@ int main()
                 next_idx++;
             // std::cerr << total_string[j] - '0';
             // std::cerr << "Placing " << total_string[j] - '0' << " in " << next_idx << std::endl;
-            data_block[i][next_idx] = total_string[j] - '0';
+            data_block[i][next_idx] = total_string[j];
 
             // now check to which bits data_block[i][idx_here] contributes
             // std::cerr << "Checking for position " << idx_here << std::endl;
@@ -97,7 +151,10 @@ int main()
                 if (!(next_idx & (1 << bit)))
                     continue;
                 // std::cerr << "contributes to " << (1 << bit) << std::endl;
-                data_block[i][1 << bit] ^= data_block[i][next_idx];
+                if (data_block[i][next_idx] == data_block[i][1 << bit])
+                    data_block[i][1 << bit] = '0';
+                else
+                    data_block[i][1 << bit] = '1';
             }
 
             next_idx++;
