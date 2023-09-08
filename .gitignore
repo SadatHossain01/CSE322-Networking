@@ -6,3 +6,5 @@ Socket Programming/src/storage
 Socket Programming/out
 *.xml
 *.class
+*.exe
+Data Link Layer/test cases/.DS_Store
