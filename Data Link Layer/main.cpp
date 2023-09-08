@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdlib>
 #include <windows.h>
+#include <ctime>
 
 int m;
 double p;
@@ -27,9 +28,6 @@ void trim(std::string &s)
 // returns {quotient, remainder}
 std::pair<std::string, std::string> divide(std::string dividend, std::string divisor)
 {
-    trim(dividend);
-    trim(divisor);
-
     // std::cerr << "After trimming: " << dividend << " " << divisor << std::endl;
 
     if (dividend.size() < divisor.size())
@@ -67,14 +65,13 @@ std::pair<std::string, std::string> divide(std::string dividend, std::string div
         cur_dividend = cur_dividend.substr(1, cur_dividend.size() - 1);
     }
 
-    trim(quotient);
-    trim(cur_dividend);
-
     return {quotient, cur_dividend};
 }
 
 int main()
 {
+    // srand(time(NULL));
+    srand(0);
     HANDLE color = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
 
@@ -178,17 +175,65 @@ int main()
         }
         std::cout << std::endl;
     }
-    std::cout << std::endl;
     SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
+    std::cout << std::endl;
 
-    std::cout << "data blocks after column-wise serialization: " << std::endl;
+    std::string sent_frame = "";
+    std::cout << "data bits after column-wise serialization: " << std::endl;
     for (int col = 1; col < data_block[0].size(); col++)
     {
         for (int row = 0; row < data_block.size(); row++)
         {
+            sent_frame += data_block[row][col];
             std::cout << data_block[row][col];
         }
     }
     std::cout << std::endl
               << std::endl;
+
+    sent_frame += std::string(gen_polynomial.size() - 1, '0');
+    std::pair<std::string, std::string> result = divide(sent_frame, gen_polynomial);
+    // minus the remainder from the sent frame
+    sent_frame = sent_frame.substr(0, sent_frame.size() - result.second.size());
+    sent_frame += result.second;
+
+    std::cout << "data bits after appending CRC checksum (sent frame): " << std::endl;
+    std::cout << sent_frame.substr(0, sent_frame.size() - result.second.size());
+    SetConsoleTextAttribute(color, CYAN_COLOR_CODE);
+    std::cout << result.second << std::endl
+              << std::endl;
+    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
+
+    // Received frame
+    std::string received_frame = sent_frame;
+    // toggle each bit with probability p
+    std::vector<boolean> toggled(received_frame.size(), false);
+    std::cout << "received frame: " << std::endl;
+    for (int i = 0; i < received_frame.size(); i++)
+    {
+        double r = (double)rand() / RAND_MAX;
+        if (r < p)
+        {
+            SetConsoleTextAttribute(color, RED_COLOR_CODE);
+            received_frame[i] = (received_frame[i] == '0' ? '1' : '0');
+            toggled[i] = true;
+        }
+        else
+            SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
+        std::cout << received_frame[i];
+    }
+    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
+    std::cout << std::endl
+              << std::endl;
+
+    // Verifying CRC checksum
+    std::pair<std::string, std::string> result2 = divide(received_frame, gen_polynomial);
+    std::cout << "result of CRC checksum matching: ";
+    trim(result2.second);
+    if (result2.second.size() == 0)
+        std::cout << "no error detected" << std::endl;
+    else
+        std::cout << "error detected" << std::endl;
+
+    std::cout << "data block after removing CRC checksum bits: " << std::endl;
 }
