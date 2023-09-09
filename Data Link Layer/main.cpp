@@ -3,18 +3,40 @@
 #include <bitset>
 #include <cassert>
 #include <vector>
-#include <cstdlib>
-#include <windows.h>
 #include <ctime>
+#include <cstdlib>
+#include <map>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 int m;
 double p;
-std::string data_string, gen_polynomial;
+std::string data_string, generator_polynomial;
 
-#define GREEN_COLOR_CODE 2
-#define CYAN_COLOR_CODE 3
-#define RED_COLOR_CODE 4
-#define WHITE_COLOR_CODE 7
+std::map<std::string, int> win_color_code{{"green", 2}, {"cyan", 3}, {"red", 4}, {"white", 7}};
+std::map<std::string, int> unix_color_code{{"green", 32}, {"cyan", 36}, {"red", 31}, {"white", 37}};
+
+template <typename T>
+inline void print_colored(const T &s, const std::string &color)
+{
+    if (color == "white")
+    {
+        std::cout << s;
+        return;
+    }
+#if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
+    assert(unix_color_code.count(color));
+    std::cout << "\033[" << unix_color_code[color] << "m" << s << "\033[0m";
+#else
+    assert(win_color_code.count(color));
+    static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, win_color_code[color]);
+    std::cout << s;
+    SetConsoleTextAttribute(hConsole, win_color_code["white"]);
+#endif
+}
 
 void trim(std::string &s)
 {
@@ -22,14 +44,12 @@ void trim(std::string &s)
     int idx = 0;
     while (idx < s.size() && s[idx] == '0')
         idx++;
-    s = s.substr(idx, s.size() - idx);
+    s = (idx == s.size() ? "" : s.substr(idx, s.size() - idx));
 }
 
 // returns {quotient, remainder}
 std::pair<std::string, std::string> divide(std::string dividend, std::string divisor)
 {
-    // std::cerr << "After trimming: " << dividend << " " << divisor << std::endl;
-
     if (dividend.size() < divisor.size())
         return {"0", dividend};
 
@@ -42,25 +62,16 @@ std::pair<std::string, std::string> divide(std::string dividend, std::string div
         cur_dividend += dividend[dividend_next_idx++];
         assert(divisor.size() == cur_dividend.size());
 
-        std::string subtrahend; // divisor or 0
+        std::string subtrahend; // divisor itself or 0
         if (cur_dividend.front() == '0')
-        {
-            quotient += '0';
-            subtrahend = std::string(divisor.size(), '0');
-        }
+            quotient += '0', subtrahend = std::string(divisor.size(), '0');
         else
-        {
-            quotient += '1';
-            subtrahend = divisor;
-        }
+            quotient += '1', subtrahend = divisor;
         // std::cerr << "cur_dividend: " << cur_dividend << " subtrahend: " << subtrahend << std::endl;
 
         assert(subtrahend.size() == cur_dividend.size());
         for (int i = 0; i < cur_dividend.size(); i++)
-            if (cur_dividend[i] == subtrahend[i])
-                cur_dividend[i] = '0';
-            else
-                cur_dividend[i] = '1';
+            cur_dividend[i] = (cur_dividend[i] == subtrahend[i] ? '0' : '1');
         // drop the MSB from cur_dividend
         cur_dividend = cur_dividend.substr(1, cur_dividend.size() - 1);
     }
@@ -68,13 +79,19 @@ std::pair<std::string, std::string> divide(std::string dividend, std::string div
     return {quotient, cur_dividend};
 }
 
+std::string subtract(const std::string &a, const std::string &b)
+{
+    std::string result(a);
+    const int sz_a = a.size(), sz_b = b.size();
+    for (int i = 0; i < b.size(); i++)
+        result[sz_a - i - 1] = (a[sz_a - i - 1] == b[sz_b - i - 1] ? '0' : '1');
+    return result;
+}
+
 int main()
 {
-    srand(time(NULL));
+    // srand(time(NULL));
     // srand(0);
-    HANDLE color = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
-
     std::cout << "enter data string: ";
     std::getline(std::cin, data_string);
     std::cout << "enter number of data bytes in a row <m>: ";
@@ -82,12 +99,12 @@ int main()
     std::cout << "enter probability <p>: ";
     std::cin >> p;
     std::cout << "enter generator polynomial: ";
-    std::cin >> gen_polynomial;
+    std::cin >> generator_polynomial;
 
     std::cout << std::endl
               << std::endl;
 
-    // padding
+    // padding to make data_string.size() a multiple of m
     while (data_string.size() % m != 0)
         data_string += '~';
     std::cout << "data string after padding: " << data_string << std::endl
@@ -95,7 +112,7 @@ int main()
 
     const int data_string_size = data_string.size();
     assert(data_string_size % m == 0);
-    const int n_rows = data_string_size / m;
+    const int n_rows = data_string_size / m; // n_rows is basically the number of data blocks
 
     // binary search for finding no. of check bits
     int low = 0, high = 60, n_check_bits = 0;
@@ -103,61 +120,54 @@ int main()
     {
         int mid = (low + high) / 2;
         if (m * 8 + mid + 1 <= (1LL << mid))
-        {
-            n_check_bits = mid;
-            high = mid - 1;
-        }
+            n_check_bits = mid, high = mid - 1;
         else
             low = mid + 1;
     }
-    const int n_cols = 8 * m + n_check_bits;
+    const int n_cols = 8 * m + n_check_bits; // no of bits transmitted per block: m*8 data bits + n_check_bits check bits
     // std::cerr << "no. of check bits: " << n_check_bits << std::endl;
 
     // printing data block (ascii code of m characters per row)
-    std::string total_string(8 * data_string_size, '0');
+    std::string ascii_binary_string(8 * data_string_size, '0');
 
     for (int i = 0; i < data_string_size; i++)
     {
         std::bitset<8> ascii(data_string[i]);
-        total_string.replace(8 * i, 8, ascii.to_string());
+        ascii_binary_string.replace(8 * i, 8, ascii.to_string());
     }
 
     std::cout << "data block (ascii code of m characters per row): " << std::endl;
     for (int i = 0; i < n_rows; i++)
-        std::cout << total_string.substr(8 * i * m, 8 * m) << std::endl;
+        std::cout << ascii_binary_string.substr(8 * i * m, 8 * m) << std::endl;
     std::cout << std::endl;
 
     std::vector<std::string> sent_data_blocks(n_rows);
-    int total_string_idx = 0;
+    int ascii_string_idx = 0;
     for (int i = 0; i < n_rows; i++)
     {
-        sent_data_blocks[i].resize(n_cols + 1, '0'); // +1 to make it 1-indexed
+        std::string &current_block = sent_data_blocks[i];
+        current_block.assign(n_cols + 1, '0'); // +1 to make it 1-indexed
         int next_idx = 1;
-        for (int j = total_string_idx; j < total_string_idx + 8 * m; j++)
+        for (int j = ascii_string_idx; j < ascii_string_idx + 8 * m; j++)
         {
             // next_idx should not be a power of 2, as those positions are reserved for check bits
             while (!(next_idx & (next_idx - 1)))
                 next_idx++;
-            // std::cerr << total_string[j] - '0';
-            // std::cerr << "Placing " << total_string[j] - '0' << " in " << next_idx << std::endl;
-            sent_data_blocks[i][next_idx] = total_string[j];
+            current_block[next_idx] = ascii_binary_string[j];
 
-            // now check to which bits data_block[i][idx_here] contributes
-            // std::cerr << "Checking for position " << idx_here << std::endl;
+            // now check to which bits current_block[idx_here] contributes
+            // std::cerr << "Checking for position " << next_idx << std::endl;
             for (int bit = 0; bit < n_check_bits; bit++)
             {
                 if (!(next_idx & (1 << bit)))
                     continue;
                 // std::cerr << "contributes to " << (1 << bit) << std::endl;
-                if (sent_data_blocks[i][next_idx] == sent_data_blocks[i][1 << bit])
-                    sent_data_blocks[i][1 << bit] = '0';
-                else
-                    sent_data_blocks[i][1 << bit] = '1';
+                current_block[1 << bit] = (current_block[1 << bit] - '0') ^ (current_block[next_idx] - '0') + '0';
             }
             next_idx++;
         }
         // std::cerr << std::endl;
-        total_string_idx += 8 * m;
+        ascii_string_idx += 8 * m; // go to next row/block
     }
 
     // now show the sent data blocks row by row
@@ -165,17 +175,9 @@ int main()
     for (int row = 0; row < n_rows; row++)
     {
         for (int col = 1; col <= n_cols; col++)
-        {
-            if (col & (col - 1)) // show it in default white
-                SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
-            else // show it in green color
-                SetConsoleTextAttribute(color, GREEN_COLOR_CODE);
-
-            std::cout << sent_data_blocks[row][col];
-        }
+            print_colored<char>(sent_data_blocks[row][col], (col & (col - 1)) ? "white" : "green"); // col & (col - 1) is false iff col is a power of 2
         std::cout << std::endl;
     }
-    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
     std::cout << std::endl;
 
     std::string sent_frame = "";
@@ -191,18 +193,17 @@ int main()
     std::cout << std::endl
               << std::endl;
 
-    sent_frame += std::string(gen_polynomial.size() - 1, '0');
-    std::pair<std::string, std::string> result = divide(sent_frame, gen_polynomial);
+    sent_frame += std::string(generator_polynomial.size() - 1, '0'); // augment the sent frame with zeroes
+    std::string remainder = divide(sent_frame, generator_polynomial).second;
+
     // subtract the remainder from the sent frame
-    sent_frame = sent_frame.substr(0, sent_frame.size() - result.second.size());
-    sent_frame += result.second;
+    sent_frame = subtract(sent_frame, remainder);
 
     std::cout << "data bits after appending CRC checksum (sent frame): " << std::endl;
-    std::cout << sent_frame.substr(0, sent_frame.size() - result.second.size());
-    SetConsoleTextAttribute(color, CYAN_COLOR_CODE);
-    std::cout << result.second << std::endl
+    std::cout << sent_frame.substr(0, sent_frame.size() - remainder.size());
+    print_colored<std::string>(remainder, "cyan");
+    std::cout << std::endl
               << std::endl;
-    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
 
     // Received frame
     std::string received_frame = sent_frame;
@@ -214,58 +215,67 @@ int main()
         double r = (double)rand() / RAND_MAX;
         if (r < p)
         {
-            SetConsoleTextAttribute(color, RED_COLOR_CODE);
             received_frame[i] = (received_frame[i] == '0' ? '1' : '0');
             toggled[i] = true;
         }
-        else
-            SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
-        std::cout << received_frame[i];
+        print_colored<char>(received_frame[i], toggled[i] ? "red" : "white");
     }
-    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
     std::cout << std::endl
               << std::endl;
 
     // Verifying CRC checksum
-    std::pair<std::string, std::string> result2 = divide(received_frame, gen_polynomial);
+    std::string remainder2 = divide(received_frame, generator_polynomial).second;
     std::cout << "result of CRC checksum matching: ";
-    trim(result2.second);
-    if (result2.second.size() == 0)
-        std::cout << "no error detected" << std::endl;
-    else
-        std::cout << "error detected" << std::endl;
+    trim(remainder2);
+    std::cout << (remainder2.empty() ? "no error detected" : "error detected") << std::endl;
     std::cout << std::endl;
 
     // remove CRC checksum bits
     std::cout << "data block after removing CRC checksum bits: " << std::endl;
-    received_frame = received_frame.substr(0, received_frame.size() - gen_polynomial.size() + 1);
+    received_frame.erase(received_frame.size() - (generator_polynomial.size() - 1), generator_polynomial.size() - 1);
     std::vector<std::string> received_data_blocks(n_rows);
     // std::cerr << received_frame << std::endl;
     for (int row = 0; row < n_rows; row++)
     {
-        received_data_blocks[row].resize(n_cols + 1, '0'); // +1 to make it 1-indexed
+        std::string &current_block = received_data_blocks[row];
+        current_block.assign(n_cols + 1, '0'); // +1 to make it 1-indexed
         for (int received_string_idx = row, k = 1; received_string_idx < received_frame.size(); received_string_idx += n_rows, k++)
         {
-            received_data_blocks[row][k] = received_frame[received_string_idx];
-            if (toggled[received_string_idx])
-                SetConsoleTextAttribute(color, RED_COLOR_CODE);
-            else
-                SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
-            std::cout << received_frame[received_string_idx];
+            current_block[k] = received_frame[received_string_idx];
+            print_colored<char>(received_frame[received_string_idx], toggled[received_string_idx] ? "red" : "white");
         }
+        // std::cerr << "cur: " << current_block << " received_frame: " << received_data_blocks[row] << std::endl;
         std::cout << std::endl;
     }
-    SetConsoleTextAttribute(color, WHITE_COLOR_CODE);
     std::cout << std::endl;
 
-    // remove check bits
+    // remove check bits after correcting error in each row
     std::cout << "data block after removing check bits: " << std::endl;
     for (int row = 0; row < n_rows; row++)
     {
+        std::string computed_check_bits(n_check_bits, '0'); // i-th computed check bit is stored at index 2^i at received_data_blocks[row]
+        std::string &current_block = received_data_blocks[row];
+        for (int col = 1; col <= n_cols; col++)
+        {
+            if (!(col & (col - 1)))
+                continue;
+            for (int bit = 0; bit < n_check_bits; bit++)
+                if (col & (1 << bit))
+                    computed_check_bits[bit] = (computed_check_bits[bit] - '0') ^ (current_block[col] - '0') + '0';
+        }
+
+        int total = 0;
+        for (int bit = 0; bit < n_check_bits; bit++)
+            if (computed_check_bits[bit] != current_block[1 << bit])
+                total += (1 << bit);
+
+        if (total <= n_cols) // correct 1-bit error
+            current_block[total] = (current_block[total] == '0' ? '1' : '0');
+
         for (int col = 1; col <= n_cols; col++)
         {
             if (col & (col - 1))
-                std::cout << received_data_blocks[row][col];
+                std::cout << current_block[col];
         }
         std::cout << std::endl;
     }
@@ -279,6 +289,7 @@ int main()
         for (int col = 1; col <= n_cols; col++)
             if (col & (col - 1))
                 cur_row += received_data_blocks[row][col];
+        // std::cerr << "decoded row: " << cur_row << std::endl;
 
         for (int j = 0; j < cur_row.size(); j += 8)
         {
