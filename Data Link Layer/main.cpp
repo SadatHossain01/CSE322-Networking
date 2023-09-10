@@ -28,7 +28,7 @@ inline void print_colored(const T &s, const std::string &color)
     }
 #if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
     assert(unix_color_code.count(color));
-    std::cout << "\033[" << unix_color_code[color] << "m" << s << "\033[0m";
+    std::cout << "\033[1;" << unix_color_code[color] << "m" << s << "\033[0m";
 #else
     assert(win_color_code.count(color));
     static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -94,12 +94,16 @@ int main()
     // srand(0);
     std::cout << "enter data string: ";
     std::getline(std::cin, data_string);
-    std::cout << "enter number of data bytes in a row <m>: ";
+    std::cout << "enter number of data bytes in a row (m): ";
     std::cin >> m;
-    std::cout << "enter probability <p>: ";
+    std::cout << "enter probability (p): ";
     std::cin >> p;
     std::cout << "enter generator polynomial: ";
     std::cin >> generator_polynomial;
+
+    trim(generator_polynomial);
+    if (generator_polynomial.empty())
+        std::cout << "Please enter a valid generator polynomial" << std::endl, exit(0);
 
     std::cout << std::endl
               << std::endl;
