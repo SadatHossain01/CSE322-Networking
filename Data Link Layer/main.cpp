@@ -91,7 +91,7 @@ std::string subtract(const std::string &a, const std::string &b)
 int main()
 {
     // srand(time(NULL));
-    // srand(0);
+    srand(1);
     std::cout << "enter data string: ";
     std::getline(std::cin, data_string);
     std::cout << "enter number of data bytes in a row (m): ";
@@ -140,7 +140,7 @@ int main()
         ascii_binary_string.replace(8 * i, 8, ascii.to_string());
     }
 
-    std::cout << "data block (ascii code of m characters per row): " << std::endl;
+    std::cout << "data block (ascii code of m characters per row):" << std::endl;
     for (int i = 0; i < n_rows; i++)
         std::cout << ascii_binary_string.substr(8 * i * m, 8 * m) << std::endl;
     std::cout << std::endl;
@@ -175,7 +175,7 @@ int main()
     }
 
     // now show the sent data blocks row by row
-    std::cout << "data blocks after adding check bits: " << std::endl;
+    std::cout << "data block after adding check bits:" << std::endl;
     for (int row = 0; row < n_rows; row++)
     {
         for (int col = 1; col <= n_cols; col++)
@@ -185,7 +185,7 @@ int main()
     std::cout << std::endl;
 
     std::string sent_frame = "";
-    std::cout << "data bits after column-wise serialization: " << std::endl;
+    std::cout << "data bits after column-wise serialization:" << std::endl;
     for (int col = 1; col <= n_cols; col++)
     {
         for (int row = 0; row < n_rows; row++)
@@ -203,7 +203,7 @@ int main()
     // subtract the remainder from the sent frame
     sent_frame = subtract(sent_frame, remainder);
 
-    std::cout << "data bits after appending CRC checksum (sent frame): " << std::endl;
+    std::cout << "data bits after appending CRC checksum (sent frame):" << std::endl;
     std::cout << sent_frame.substr(0, sent_frame.size() - remainder.size());
     print_colored<std::string>(remainder, "cyan");
     std::cout << std::endl
@@ -213,7 +213,7 @@ int main()
     std::string received_frame = sent_frame;
     // toggle each bit with probability p
     std::vector<bool> toggled(received_frame.size(), false);
-    std::cout << "received frame: " << std::endl;
+    std::cout << "received frame:" << std::endl;
     for (int i = 0; i < received_frame.size(); i++)
     {
         double r = (double)rand() / RAND_MAX;
@@ -235,7 +235,7 @@ int main()
     std::cout << std::endl;
 
     // remove CRC checksum bits
-    std::cout << "data block after removing CRC checksum bits: " << std::endl;
+    std::cout << "data block after removing CRC checksum bits:" << std::endl;
     received_frame.erase(received_frame.size() - (generator_polynomial.size() - 1), generator_polynomial.size() - 1);
     std::vector<std::string> received_data_blocks(n_rows);
     // std::cerr << received_frame << std::endl;
@@ -254,7 +254,7 @@ int main()
     std::cout << std::endl;
 
     // remove check bits after correcting error in each row
-    std::cout << "data block after removing check bits: " << std::endl;
+    std::cout << "data block after removing check bits:" << std::endl;
     for (int row = 0; row < n_rows; row++)
     {
         std::string computed_check_bits(n_check_bits, '0'); // i-th computed check bit is stored at index 2^i at received_data_blocks[row]
