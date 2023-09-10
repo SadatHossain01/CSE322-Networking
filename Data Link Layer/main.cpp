@@ -90,8 +90,7 @@ std::string subtract(const std::string &a, const std::string &b)
 
 int main()
 {
-    // srand(time(NULL));
-    srand(1);
+    srand(time(NULL));
     std::cout << "enter data string: ";
     std::getline(std::cin, data_string);
     std::cout << "enter number of data bytes in a row (m): ";
